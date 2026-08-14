@@ -5,6 +5,7 @@ import type { Project } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { FinancialsTab } from "../components/FinancialsTab";
 import { Layout } from "../components/Layout";
+import { ProjectEditForm } from "../components/ProjectEditForm";
 import { ProjectTree } from "../components/ProjectTree";
 import { SubPhaseFeed } from "../components/SubPhaseFeed";
 
@@ -16,10 +17,15 @@ export function ProjectPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [selectedSubPhaseId, setSelectedSubPhaseId] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
-    api.get<Project>(`/projects/${id}`).then((res) => setProject(res.data));
+    fetchProject();
   }, [id]);
+
+  function fetchProject() {
+    api.get<Project>(`/projects/${id}`).then((res) => setProject(res.data));
+  }
 
   if (!project) {
     return (
@@ -31,10 +37,31 @@ export function ProjectPage() {
 
   return (
     <Layout>
-      <div className="mb-4">
-        <h1 className="text-2xl font-semibold text-gray-900">{project.name}</h1>
-        <p className="text-sm text-gray-500">{project.location}</p>
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">{project.name}</h1>
+          <p className="text-sm text-gray-500">{project.location}</p>
+        </div>
+        {user?.role === "ADMIN" && (
+          <button
+            type="button"
+            onClick={() => setEditing((prev) => !prev)}
+            className="border border-gray-300 text-gray-700 text-sm rounded px-4 py-2 hover:bg-gray-50"
+          >
+            {editing ? "ביטול עריכה" : "ערוך פרויקט"}
+          </button>
+        )}
       </div>
+
+      {user?.role === "ADMIN" && editing && (
+        <ProjectEditForm
+          project={project}
+          onSaved={() => {
+            fetchProject();
+            setEditing(false);
+          }}
+        />
+      )}
 
       {user?.role === "ADMIN" && (
         <div className="flex gap-4 border-b border-gray-200 mb-6">

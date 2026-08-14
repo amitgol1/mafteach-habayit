@@ -16,6 +16,34 @@ const participantInclude = {
   participants: { include: { user: { select: { id: true, name: true, trade: true } } } },
 } as const;
 
+async function validateParticipants(
+  participants: { trade?: string; userId?: number }[]
+): Promise<{ error: string } | { data: { trade: string; userId: number }[] }> {
+  if (!Array.isArray(participants) || participants.length > 7) {
+    return { error: "participants must be an array of at most 7 entries" };
+  }
+  for (const p of participants) {
+    if (!p.trade || !validTrades.includes(p.trade)) {
+      return { error: `participants[].trade must be one of ${validTrades.join(", ")}` };
+    }
+    if (!p.userId) {
+      return { error: "participants[].userId is required" };
+    }
+  }
+  const trades = participants.map((p) => p.trade);
+  if (new Set(trades).size !== trades.length) {
+    return { error: "participants must not contain duplicate trades" };
+  }
+  const userIds = participants.map((p) => p.userId!);
+  const existingUsers = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true } });
+  const existingIds = new Set(existingUsers.map((u) => u.id));
+  const missing = userIds.filter((id) => !existingIds.has(id));
+  if (missing.length > 0) {
+    return { error: `userId(s) not found: ${missing.join(", ")}` };
+  }
+  return { data: participants.map((p) => ({ trade: p.trade!, userId: p.userId! })) };
+}
+
 projectsRouter.get(
   "/",
   asyncHandler(async (req: AuthedRequest, res) => {
@@ -60,6 +88,7 @@ projectsRouter.get(
       where: { id },
       include: {
         units: { include: { phases: { orderBy: { order: "asc" }, include: { subPhases: true } } } },
+        ...participantInclude,
       },
     });
     if (!project) {
@@ -115,34 +144,12 @@ projectsRouter.post(
 
     let participantsData: { trade: string; userId: number }[] = [];
     if (participants) {
-      if (!Array.isArray(participants) || participants.length > 7) {
-        res.status(400).json({ error: "participants must be an array of at most 7 entries" });
+      const result = await validateParticipants(participants);
+      if ("error" in result) {
+        res.status(400).json({ error: result.error });
         return;
       }
-      for (const p of participants) {
-        if (!p.trade || !validTrades.includes(p.trade)) {
-          res.status(400).json({ error: `participants[].trade must be one of ${validTrades.join(", ")}` });
-          return;
-        }
-        if (!p.userId) {
-          res.status(400).json({ error: "participants[].userId is required" });
-          return;
-        }
-      }
-      const trades = participants.map((p) => p.trade);
-      if (new Set(trades).size !== trades.length) {
-        res.status(400).json({ error: "participants must not contain duplicate trades" });
-        return;
-      }
-      const userIds = participants.map((p) => p.userId!);
-      const existingUsers = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true } });
-      const existingIds = new Set(existingUsers.map((u) => u.id));
-      const missing = userIds.filter((id) => !existingIds.has(id));
-      if (missing.length > 0) {
-        res.status(400).json({ error: `userId(s) not found: ${missing.join(", ")}` });
-        return;
-      }
-      participantsData = participants.map((p) => ({ trade: p.trade!, userId: p.userId! }));
+      participantsData = result.data;
     }
 
     const project = await prisma.project.create({
@@ -166,12 +173,45 @@ projectsRouter.patch(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    const { name, location, overallStatus } = req.body as {
+    const { name, location, overallStatus, owners, totalBudget, currentStage, participants } = req.body as {
       name?: string;
       location?: string;
       overallStatus?: string;
+      owners?: string;
+      totalBudget?: number;
+      currentStage?: string;
+      participants?: { trade?: string; userId?: number }[];
     };
-    const project = await prisma.project.update({ where: { id }, data: { name, location, overallStatus } });
+    if (currentStage && !validStages.includes(currentStage)) {
+      res.status(400).json({ error: `currentStage must be one of ${validStages.join(", ")}` });
+      return;
+    }
+
+    let participantsData: { trade: string; userId: number }[] | undefined;
+    if (participants !== undefined) {
+      const result = await validateParticipants(participants);
+      if ("error" in result) {
+        res.status(400).json({ error: result.error });
+        return;
+      }
+      participantsData = result.data;
+    }
+
+    const project = await prisma.$transaction(async (tx) => {
+      if (participantsData !== undefined) {
+        await tx.projectParticipant.deleteMany({ where: { projectId: id } });
+        if (participantsData.length > 0) {
+          await tx.projectParticipant.createMany({
+            data: participantsData.map((p) => ({ ...p, projectId: id })),
+          });
+        }
+      }
+      return tx.project.update({
+        where: { id },
+        data: { name, location, overallStatus, owners, totalBudget, currentStage },
+        include: participantInclude,
+      });
+    });
     res.json(project);
   })
 );
