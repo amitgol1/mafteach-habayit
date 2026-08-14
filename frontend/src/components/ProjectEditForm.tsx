@@ -14,8 +14,8 @@ export function ProjectEditForm({ project, onSaved }: ProjectEditFormProps) {
   }
 
   return (
-    <div dir="rtl" className="text-right mb-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">עריכת פרויקט</h2>
+    <div className="mb-6">
+      <h2 className="mb-3 font-display text-lg text-ink">עריכת פרויקט</h2>
       <ProjectFormFields
         initialValues={{
           name: project.name,

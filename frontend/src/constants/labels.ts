@@ -1,4 +1,4 @@
-import type { ProjectStage, Role, Trade } from "../api/types";
+import type { PhaseStatus, ProjectStage, Role, Trade } from "../api/types";
 
 export const tradeLabels: Record<Trade, string> = {
   ARCHITECT: "אדריכל",
@@ -15,9 +15,12 @@ export const projectStageLabels: Record<ProjectStage, string> = {
   ELECTRICITY: "חשמל",
   PLUMBING: "אינסטלציה",
   PLASTER: "טיח",
-  FLOORING: "ריצוף",
-  ALUMINUM: "אלומיניום",
   FENCES: "גדרות",
+  FLOORING: "ריצוף",
+  GARDEN_DEVELOPMENT: "פיתוח גינה",
+  FENCE_DEVELOPMENT: "פיתוח גדרות",
+  FINISHES: "גמרים",
+  FORM_4: "טופס 4",
 };
 
 export const roleLabels: Record<Role, string> = {
@@ -25,6 +28,33 @@ export const roleLabels: Record<Role, string> = {
   COLLABORATOR: "איש מקצוע",
 };
 
+export const phaseStatusLabels: Record<PhaseStatus, string> = {
+  NOT_STARTED: "טרם החל",
+  IN_PROGRESS: "בביצוע",
+  COMPLETED: "הושלם",
+  BLOCKED: "מעוכב",
+};
+
 export const trades = Object.keys(tradeLabels) as Trade[];
 export const projectStages = Object.keys(projectStageLabels) as ProjectStage[];
 export const roles = Object.keys(roleLabels) as Role[];
+
+/**
+ * Enum values arrive from the API as English strings that are wider than our
+ * union types (e.g. `User.trade` is `string`), so look up defensively and fall
+ * back to the raw value instead of rendering `undefined`.
+ */
+export function tradeLabel(trade: string | null | undefined): string | null {
+  if (!trade) return null;
+  return tradeLabels[trade as Trade] ?? trade;
+}
+
+export function roleLabel(role: string | null | undefined): string | null {
+  if (!role) return null;
+  return roleLabels[role as Role] ?? role;
+}
+
+export function projectStageLabel(stage: string | null | undefined): string | null {
+  if (!stage) return null;
+  return projectStageLabels[stage as ProjectStage] ?? stage;
+}

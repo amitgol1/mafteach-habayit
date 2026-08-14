@@ -34,8 +34,11 @@ export const ProjectStage = {
   ELECTRICITY: "ELECTRICITY",
   PLUMBING: "PLUMBING",
   PLASTER: "PLASTER",
-  FLOORING: "FLOORING",
-  ALUMINUM: "ALUMINUM",
   FENCES: "FENCES",
+  FLOORING: "FLOORING",
+  GARDEN_DEVELOPMENT: "GARDEN_DEVELOPMENT",
+  FENCE_DEVELOPMENT: "FENCE_DEVELOPMENT",
+  FINISHES: "FINISHES",
+  FORM_4: "FORM_4",
 } as const;
 export type ProjectStage = (typeof ProjectStage)[keyof typeof ProjectStage];

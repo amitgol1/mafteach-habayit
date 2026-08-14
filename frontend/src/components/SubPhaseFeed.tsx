@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../api/client";
 import type { Update } from "../api/types";
+import { tradeLabel } from "../constants/labels";
 
 export function SubPhaseFeed({ subPhaseId }: { subPhaseId: number }) {
   const [updates, setUpdates] = useState<Update[]>([]);
@@ -43,45 +44,49 @@ export function SubPhaseFeed({ subPhaseId }: { subPhaseId: number }) {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto space-y-3 mb-3">
-        {loading && <p className="text-gray-500 text-sm">Loading...</p>}
-        {!loading && updates.length === 0 && <p className="text-gray-400 text-sm">No updates yet.</p>}
-        {updates.map((u) => (
-          <div key={u.id} className="bg-white border border-gray-200 rounded-lg p-3">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>
-                {u.user.name}
-                {u.user.trade ? ` (${u.user.trade})` : ""}
-              </span>
-              <span>{new Date(u.timestamp).toLocaleString()}</span>
-            </div>
-            {u.messageText && <p className="text-sm text-gray-800">{u.messageText}</p>}
-            {u.mediaUrl && u.mediaType === "IMAGE" && (
-              <img src={u.mediaUrl} alt="" className="mt-2 rounded max-h-64 object-contain" />
-            )}
-            {u.mediaUrl && u.mediaType === "VIDEO" && (
-              <video src={u.mediaUrl} controls className="mt-2 rounded max-h-64" />
-            )}
-          </div>
-        ))}
+    <div className="flex h-full flex-col">
+      <h3 className="eyebrow mb-3 text-brass-deep">יומן עדכונים</h3>
+
+      <div className="mb-3 flex-1 space-y-3 overflow-y-auto">
+        {loading && <p className="text-sm text-ink-soft">טוען...</p>}
+        {!loading && updates.length === 0 && <p className="text-sm text-ink-faint">אין עדכונים עדיין</p>}
+        {updates.map((u) => {
+          const trade = tradeLabel(u.user.trade);
+          return (
+            <article key={u.id} className="rounded-lg border border-limestone-deep bg-white p-3 shadow-panel">
+              <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
+                <span className="truncate font-medium text-ink">
+                  {u.user.name}
+                  {trade ? <span className="font-normal text-ink-faint"> · {trade}</span> : ""}
+                </span>
+                <time className="numeric shrink-0 text-ink-faint" dateTime={u.timestamp}>
+                  {new Date(u.timestamp).toLocaleString("he-IL")}
+                </time>
+              </div>
+              {u.messageText && <p className="text-sm leading-relaxed text-ink">{u.messageText}</p>}
+              {u.mediaUrl && u.mediaType === "IMAGE" && (
+                <img src={u.mediaUrl} alt="" className="mt-2 max-h-64 rounded-lg border border-limestone object-contain" />
+              )}
+              {u.mediaUrl && u.mediaType === "VIDEO" && (
+                <video src={u.mediaUrl} controls className="mt-2 max-h-64 rounded-lg border border-limestone" />
+              )}
+            </article>
+          );
+        })}
       </div>
-      <form onSubmit={handleSubmit} className="border-t border-gray-200 pt-3 space-y-2">
+
+      <form onSubmit={handleSubmit} className="space-y-2 border-t border-limestone-deep pt-3">
         <textarea
           value={messageText}
           onChange={(e) => setMessageText(e.target.value)}
-          placeholder="Post an update..."
+          placeholder="כתבו עדכון..."
           rows={2}
-          className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+          className="form-field resize-none text-sm"
         />
-        <div className="flex items-center justify-between">
-          <input ref={fileRef} type="file" accept="image/*,video/*" className="text-sm" />
-          <button
-            type="submit"
-            disabled={posting}
-            className="bg-gray-900 text-white text-sm rounded px-4 py-2 disabled:opacity-50"
-          >
-            {posting ? "Posting..." : "Post"}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <input ref={fileRef} type="file" accept="image/*,video/*" className="file-field" />
+          <button type="submit" disabled={posting} className="btn btn-primary">
+            {posting ? "שולח..." : "שליחה"}
           </button>
         </div>
       </form>

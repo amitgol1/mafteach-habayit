@@ -123,10 +123,10 @@ export function ProjectFormFields({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
-      <div className="grid sm:grid-cols-2 gap-4">
+    <form onSubmit={handleSubmit} className="panel panel-edge space-y-5 p-4 sm:p-5">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-sm text-gray-600 mb-1" htmlFor="name">
+          <label className="form-label" htmlFor="name">
             שם הפרויקט
           </label>
           <input
@@ -135,11 +135,11 @@ export function ProjectFormFields({
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2"
+            className="form-field"
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-600 mb-1" htmlFor="location">
+          <label className="form-label" htmlFor="location">
             מיקום
           </label>
           <input
@@ -148,11 +148,11 @@ export function ProjectFormFields({
             required
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2"
+            className="form-field"
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-600 mb-1" htmlFor="owners">
+          <label className="form-label" htmlFor="owners">
             לקוחות / יזמים
           </label>
           <input
@@ -160,11 +160,11 @@ export function ProjectFormFields({
             type="text"
             value={owners}
             onChange={(e) => setOwners(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2"
+            className="form-field"
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-600 mb-1" htmlFor="totalBudget">
+          <label className="form-label" htmlFor="totalBudget">
             תקציב כולל
           </label>
           <input
@@ -173,20 +173,20 @@ export function ProjectFormFields({
             step="0.01"
             value={totalBudget}
             onChange={(e) => setTotalBudget(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2"
+            className="form-field numeric"
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-600 mb-1" htmlFor="currentStage">
-            סטטוס נוכחי
+          <label className="form-label" htmlFor="currentStage">
+            שלב נוכחי
           </label>
           <select
             id="currentStage"
             value={currentStage}
             onChange={(e) => setCurrentStage(e.target.value as ProjectStage | "")}
-            className="w-full border border-gray-300 rounded px-3 py-2 bg-white"
+            className="form-field"
           >
-            <option value="">בחר סטטוס</option>
+            <option value="">בחרו שלב</option>
             {projectStages.map((stage) => (
               <option key={stage} value={stage}>
                 {projectStageLabels[stage]}
@@ -196,16 +196,16 @@ export function ProjectFormFields({
         </div>
       </div>
 
-      <div>
-        <h2 className="font-medium text-gray-900 mb-2">צוות הפרויקט</h2>
-        {loadingUsers && <p className="text-gray-500 text-sm">טוען משתמשים...</p>}
+      <div className="border-t border-limestone pt-4">
+        <h2 className="eyebrow mb-3 text-brass-deep">צוות הפרויקט</h2>
+        {loadingUsers && <p className="text-sm text-ink-soft">טוען משתמשים...</p>}
         {!loadingUsers && (
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             {trades.map((trade) => {
               const users = usersByTrade[trade] ?? [];
               return (
                 <div key={trade}>
-                  <label className="block text-sm text-gray-600 mb-1" htmlFor={`trade-${trade}`}>
+                  <label className="form-label" htmlFor={`trade-${trade}`}>
                     {tradeLabels[trade]}
                   </label>
                   <select
@@ -213,7 +213,7 @@ export function ProjectFormFields({
                     value={selectedUserByTrade[trade] ?? ""}
                     onChange={(e) => handleTradeChange(trade, e.target.value)}
                     disabled={users.length === 0}
-                    className="w-full border border-gray-300 rounded px-3 py-2 bg-white disabled:bg-gray-100 disabled:text-gray-400"
+                    className="form-field"
                   >
                     <option value="">{users.length === 0 ? "אין משתמשים בתחום זה" : "לא נבחר"}</option>
                     {users.map((user) => (
@@ -229,14 +229,16 @@ export function ProjectFormFields({
         )}
       </div>
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-      {success && <p className="text-green-700 text-sm">{success}</p>}
+      {error && (
+        <p className="rounded-lg border border-brick/30 bg-brick-tint px-3 py-2 text-sm text-brick-deep">{error}</p>
+      )}
+      {success && (
+        <p className="rounded-lg border border-eucalyptus/30 bg-eucalyptus-tint px-3 py-2 text-sm text-eucalyptus-deep">
+          {success}
+        </p>
+      )}
 
-      <button
-        type="submit"
-        disabled={saving}
-        className="bg-gray-900 text-white text-sm rounded px-4 py-2 disabled:opacity-50"
-      >
+      <button type="submit" disabled={saving} className="btn btn-primary">
         {saving ? savingLabel : submitLabel}
       </button>
     </form>

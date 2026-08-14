@@ -8,8 +8,9 @@ export function ProjectCreationForm() {
   }
 
   return (
-    <div dir="rtl" className="text-right">
-      <h1 className="text-2xl font-semibold text-gray-900 mb-4">יצירת פרויקט חדש</h1>
+    <div>
+      <p className="eyebrow text-brass-deep">ניהול</p>
+      <h1 className="mt-1 mb-4 font-display text-2xl text-ink sm:text-3xl">יצירת פרויקט חדש</h1>
       <ProjectFormFields
         submitLabel="צור פרויקט"
         savingLabel="שומר..."

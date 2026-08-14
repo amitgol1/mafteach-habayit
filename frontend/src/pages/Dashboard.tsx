@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import type { Phase, Project } from "../api/types";
 import { Layout } from "../components/Layout";
 import { StatusBadge } from "../components/StatusBadge";
+import { projectStageLabel } from "../constants/labels";
 
 function activePhase(project: Project): Phase | null {
   const phases = project.units.flatMap((u) => u.phases).sort((a, b) => a.order - b.order);
@@ -23,30 +24,46 @@ export function Dashboard() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Projects</h1>
+      <div className="mb-6">
+        <p className="eyebrow text-brass-deep">סקירה כללית</p>
+        <h1 className="mt-1 font-display text-2xl text-ink sm:text-3xl">הפרויקטים שלי</h1>
       </div>
-      {loading && <p className="text-gray-500">Loading...</p>}
-      {!loading && projects.length === 0 && <p className="text-gray-500">No projects yet.</p>}
+
+      {loading && <p className="text-sm text-ink-soft">טוען...</p>}
+      {!loading && projects.length === 0 && (
+        <div className="panel p-8 text-center">
+          <p className="text-sm text-ink-soft">אין פרויקטים עדיין</p>
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         {projects.map((project) => {
           const phase = activePhase(project);
+          const stage = projectStageLabel(project.currentStage);
           return (
             <Link
               key={project.id}
               to={`/projects/${project.id}`}
-              className="block bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
+              className="panel panel-edge block p-4 transition-shadow hover:shadow-lift"
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="font-medium text-gray-900">{project.name}</h2>
-                  <p className="text-sm text-gray-500">{project.location}</p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="truncate font-display text-lg text-ink">{project.name}</h2>
+                  <p className="mt-0.5 truncate text-sm text-ink-soft">{project.location}</p>
                 </div>
                 <StatusBadge status={project.overallStatus} />
               </div>
-              <p className="text-sm text-gray-600 mt-3">
-                Active phase: <span className="font-medium">{phase ? phase.name : "None"}</span>
-              </p>
+
+              <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-limestone pt-3 text-sm">
+                <div className="min-w-0">
+                  <dt className="eyebrow text-ink-faint">שלב פעיל</dt>
+                  <dd className="mt-0.5 truncate font-medium text-ink">{phase ? phase.name : "אין"}</dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="eyebrow text-ink-faint">שלב הפרויקט</dt>
+                  <dd className="mt-0.5 truncate font-medium text-brass-deep">{stage ?? "טרם נקבע"}</dd>
+                </div>
+              </dl>
             </Link>
           );
         })}

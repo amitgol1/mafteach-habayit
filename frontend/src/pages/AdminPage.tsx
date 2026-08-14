@@ -7,6 +7,11 @@ import { UserManagementForm } from "../components/UserManagementForm";
 
 type Tab = "project" | "user";
 
+const tabLabels: Record<Tab, string> = {
+  project: "יצירת פרויקט",
+  user: "ניהול משתמשים",
+};
+
 export function AdminPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("project");
@@ -17,25 +22,20 @@ export function AdminPage() {
 
   return (
     <Layout>
-      <div dir="rtl" className="flex gap-4 border-b border-gray-200 mb-6 text-right">
-        <button
-          type="button"
-          onClick={() => setTab("project")}
-          className={`pb-2 text-sm font-medium border-b-2 ${
-            tab === "project" ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500"
-          }`}
-        >
-          יצירת פרויקט
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("user")}
-          className={`pb-2 text-sm font-medium border-b-2 ${
-            tab === "user" ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500"
-          }`}
-        >
-          ניהול משתמשים
-        </button>
+      <div className="mb-6 flex gap-1 border-b border-limestone-deep">
+        {(["project", "user"] as Tab[]).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={`relative px-4 pb-2.5 text-sm font-medium transition-colors ${
+              tab === t ? "text-ink" : "text-ink-faint hover:text-ink-soft"
+            }`}
+          >
+            {tabLabels[t]}
+            {tab === t && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brass" />}
+          </button>
+        ))}
       </div>
 
       {tab === "project" && <ProjectCreationForm />}

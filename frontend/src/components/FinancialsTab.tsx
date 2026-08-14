@@ -2,6 +2,12 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../api/client";
 import type { FinancialSummary } from "../api/types";
 
+const currency = new Intl.NumberFormat("he-IL", {
+  style: "currency",
+  currency: "ILS",
+  maximumFractionDigits: 0,
+});
+
 export function FinancialsTab({ projectId }: { projectId: number }) {
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [amountPaid, setAmountPaid] = useState("");
@@ -36,31 +42,31 @@ export function FinancialsTab({ projectId }: { projectId: number }) {
     }
   }
 
-  if (!summary) return <p className="text-gray-500 text-sm">Loading...</p>;
+  if (!summary) return <p className="text-sm text-ink-soft">טוען...</p>;
+
+  const totals = [
+    { label: "סה״כ לתשלום", value: summary.totals.totalDue, tone: "text-ink", edge: "panel-edge" },
+    { label: "שולם", value: summary.totals.totalPaid, tone: "text-eucalyptus-deep", edge: "panel-edge" },
+    { label: "יתרה לתשלום", value: summary.totals.remaining, tone: "text-brick-deep", edge: "panel-edge-brass" },
+  ];
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <p className="text-xs text-gray-500">Total due</p>
-          <p className="text-xl font-semibold text-gray-900">{summary.totals.totalDue.toLocaleString()}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <p className="text-xs text-gray-500">Total paid</p>
-          <p className="text-xl font-semibold text-green-700">{summary.totals.totalPaid.toLocaleString()}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <p className="text-xs text-gray-500">Remaining</p>
-          <p className="text-xl font-semibold text-red-700">{summary.totals.remaining.toLocaleString()}</p>
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {totals.map((item) => (
+          <div key={item.label} className={`panel ${item.edge} p-4`}>
+            <p className="eyebrow text-ink-faint">{item.label}</p>
+            <p className={`numeric mt-1 text-xl font-semibold ${item.tone}`}>{currency.format(item.value)}</p>
+          </div>
+        ))}
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-        <h3 className="font-medium text-gray-900">Add financial record</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <form onSubmit={handleSubmit} className="panel space-y-4 p-4">
+        <h3 className="font-display text-lg text-ink">הוספת רשומה כספית</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="block text-sm text-gray-600 mb-1" htmlFor="totalDue">
-              Total due
+            <label className="form-label" htmlFor="totalDue">
+              סכום לתשלום
             </label>
             <input
               id="totalDue"
@@ -69,12 +75,12 @@ export function FinancialsTab({ projectId }: { projectId: number }) {
               required
               value={totalDue}
               onChange={(e) => setTotalDue(e.target.value)}
-              className="w-full border border-gray-300 rounded px-3 py-2"
+              className="form-field numeric"
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1" htmlFor="amountPaid">
-              Amount paid
+            <label className="form-label" htmlFor="amountPaid">
+              סכום ששולם
             </label>
             <input
               id="amountPaid"
@@ -82,36 +88,43 @@ export function FinancialsTab({ projectId }: { projectId: number }) {
               step="0.01"
               value={amountPaid}
               onChange={(e) => setAmountPaid(e.target.value)}
-              className="w-full border border-gray-300 rounded px-3 py-2"
+              className="form-field numeric"
             />
           </div>
         </div>
         <div>
-          <label className="block text-sm text-gray-600 mb-1">Receipt</label>
-          <input ref={fileRef} type="file" accept="image/*" className="text-sm" />
+          <label className="form-label" htmlFor="receipt">
+            קבלה
+          </label>
+          <input id="receipt" ref={fileRef} type="file" accept="image/*" className="file-field" />
         </div>
-        <button
-          type="submit"
-          disabled={saving}
-          className="bg-gray-900 text-white text-sm rounded px-4 py-2 disabled:opacity-50"
-        >
-          {saving ? "Saving..." : "Add record"}
+        <button type="submit" disabled={saving} className="btn btn-primary">
+          {saving ? "שומר..." : "הוספת רשומה"}
         </button>
       </form>
 
-      <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
-        {summary.records.length === 0 && <p className="p-4 text-sm text-gray-400">No records yet.</p>}
+      <div className="panel divide-y divide-limestone p-0">
+        {summary.records.length === 0 && <p className="p-4 text-sm text-ink-faint">אין רשומות עדיין</p>}
         {summary.records.map((r) => (
-          <div key={r.id} className="p-3 flex items-center justify-between text-sm">
-            <div>
-              <p className="text-gray-800">
-                Paid {r.amountPaid.toLocaleString()} / {r.totalDue.toLocaleString()}
+          <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
+            <div className="min-w-0">
+              <p className="numeric text-ink">
+                {currency.format(r.amountPaid)}
+                <span className="text-ink-faint"> מתוך </span>
+                {currency.format(r.totalDue)}
               </p>
-              <p className="text-xs text-gray-500">{new Date(r.timestamp).toLocaleString()}</p>
+              <time className="numeric text-xs text-ink-faint" dateTime={r.timestamp}>
+                {new Date(r.timestamp).toLocaleString("he-IL")}
+              </time>
             </div>
             {r.receiptMediaUrl && (
-              <a href={r.receiptMediaUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                Receipt
+              <a
+                href={r.receiptMediaUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm font-medium text-blueprint underline-offset-4 hover:text-brass-deep hover:underline"
+              >
+                צפייה בקבלה
               </a>
             )}
           </div>

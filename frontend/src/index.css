@@ -1,5 +1,207 @@
 @import "tailwindcss";
 
-body {
-  margin: 0;
+@theme {
+  --color-ink: #16262e;
+  --color-ink-soft: #4e5f68;
+  --color-ink-faint: #7a868c;
+
+  --color-blueprint: #1f4a5f;
+  --color-blueprint-deep: #143441;
+  --color-blueprint-soft: #3e6f86;
+  --color-blueprint-tint: #dce7ec;
+
+  --color-brass: #b5822f;
+  --color-brass-deep: #7e5a1d;
+  --color-brass-tint: #f5e6c8;
+
+  --color-limestone: #e7e2d9;
+  --color-limestone-deep: #d4cdc0;
+  --color-plaster: #fbf9f5;
+
+  --color-eucalyptus: #47725a;
+  --color-eucalyptus-deep: #2f5741;
+  --color-eucalyptus-tint: #dce8de;
+
+  --color-brick: #a9432e;
+  --color-brick-deep: #8a3524;
+  --color-brick-tint: #f5ded6;
+
+  --font-display: "Suez One", "IBM Plex Sans Hebrew", Georgia, serif;
+  --font-sans: "IBM Plex Sans Hebrew", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "IBM Plex Sans Hebrew", ui-monospace, monospace;
+
+  --radius-panel: 0.75rem;
+
+  --shadow-panel: 0 1px 2px rgb(22 38 46 / 0.05), 0 6px 18px -10px rgb(22 38 46 / 0.18);
+  --shadow-lift: 0 2px 4px rgb(22 38 46 / 0.06), 0 14px 30px -14px rgb(22 38 46 / 0.28);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    background-color: var(--color-limestone);
+    /* Faint setting-out grid: the limestone ground reads as blueprint paper. */
+    background-image:
+      linear-gradient(to right, rgb(31 74 95 / 0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(31 74 95 / 0.045) 1px, transparent 1px);
+    background-size: 34px 34px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: var(--color-brass-tint);
+    color: var(--color-blueprint-deep);
+  }
+}
+
+@layer components {
+  .panel {
+    background-color: var(--color-plaster);
+    border: 1px solid var(--color-limestone-deep);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-panel);
+  }
+
+  /* Leading edge rule — logical side, so it sits on the right under dir="rtl". */
+  .panel-edge {
+    border-inline-start-width: 3px;
+    border-inline-start-color: var(--color-blueprint);
+  }
+
+  .panel-edge-brass {
+    border-inline-start-width: 3px;
+    border-inline-start-color: var(--color-brass);
+  }
+
+  /* Hebrew has no uppercase and reads badly when tracked out, so labels stay
+     in the sans face at their natural case. */
+  .form-label {
+    display: block;
+    margin-bottom: 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-ink-soft);
+  }
+
+  .form-field {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-family: inherit;
+    font-size: 0.9375rem;
+    color: var(--color-ink);
+    background-color: #fff;
+    border: 1px solid var(--color-limestone-deep);
+    border-radius: 0.5rem;
+    outline: none;
+    transition:
+      border-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+
+  .form-field::placeholder {
+    color: var(--color-ink-faint);
+  }
+
+  .form-field:focus {
+    border-color: var(--color-blueprint-soft);
+    box-shadow: 0 0 0 3px rgb(181 130 47 / 0.25);
+  }
+
+  .form-field:disabled {
+    background-color: var(--color-limestone);
+    color: var(--color-ink-faint);
+    cursor: not-allowed;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1.125rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      color 150ms ease,
+      border-color 150ms ease;
+  }
+
+  .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .btn:focus-visible {
+    outline: 2px solid var(--color-brass);
+    outline-offset: 2px;
+  }
+
+  .btn-primary {
+    background-color: var(--color-blueprint);
+    color: var(--color-plaster);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--color-blueprint-deep);
+  }
+
+  .btn-ghost {
+    background-color: transparent;
+    color: var(--color-blueprint);
+    border-color: var(--color-limestone-deep);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background-color: var(--color-blueprint-tint);
+    border-color: var(--color-blueprint-soft);
+  }
+
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-ink-soft);
+  }
+
+  /* Digits stay in the mono face; any Hebrew inside falls through to the
+     Plex sibling that ships Hebrew glyphs. */
+  .numeric {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Native file inputs can't be styled directly — target the button pseudo-element. */
+  .file-field {
+    font-size: 0.8125rem;
+    color: var(--color-ink-soft);
+    max-width: 100%;
+  }
+
+  .file-field::file-selector-button {
+    margin-inline-end: 0.75rem;
+    padding: 0.375rem 0.875rem;
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-blueprint);
+    background-color: var(--color-blueprint-tint);
+    border: 1px solid var(--color-limestone-deep);
+    border-radius: 0.5rem;
+    cursor: pointer;
+  }
+
+  .file-field::file-selector-button:hover {
+    background-color: var(--color-brass-tint);
+    color: var(--color-brass-deep);
+  }
 }

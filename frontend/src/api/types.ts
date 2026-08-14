@@ -14,9 +14,12 @@ export type ProjectStage =
   | "ELECTRICITY"
   | "PLUMBING"
   | "PLASTER"
+  | "FENCES"
   | "FLOORING"
-  | "ALUMINUM"
-  | "FENCES";
+  | "GARDEN_DEVELOPMENT"
+  | "FENCE_DEVELOPMENT"
+  | "FINISHES"
+  | "FORM_4";
 
 export interface User {
   id: number;

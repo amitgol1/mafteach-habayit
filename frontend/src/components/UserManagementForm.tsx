@@ -44,92 +44,100 @@ export function UserManagementForm() {
   }
 
   return (
-    <div dir="rtl" className="text-right">
-      <h1 className="text-2xl font-semibold text-gray-900 mb-4">הוספת משתמש חדש</h1>
-      <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-lg p-4 space-y-4 max-w-lg">
-        <div>
-          <label className="block text-sm text-gray-600 mb-1" htmlFor="name">
-            שם מלא
-          </label>
-          <input
-            id="name"
-            type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 mb-1" htmlFor="email">
-            אימייל / שם משתמש
-          </label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 mb-1" htmlFor="password">
-            סיסמה
-          </label>
-          <input
-            id="password"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 mb-1" htmlFor="role">
-            הרשאת מערכת
-          </label>
-          <select
-            id="role"
-            value={role}
-            onChange={(e) => setRole(e.target.value as Role)}
-            className="w-full border border-gray-300 rounded px-3 py-2 bg-white"
-          >
-            {roles.map((r) => (
-              <option key={r} value={r}>
-                {roleLabels[r]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 mb-1" htmlFor="trade">
-            תחום עיסוק
-          </label>
-          <select
-            id="trade"
-            value={trade}
-            onChange={(e) => setTrade(e.target.value as Trade | "")}
-            className="w-full border border-gray-300 rounded px-3 py-2 bg-white"
-          >
-            <option value="">ללא</option>
-            {trades.map((t) => (
-              <option key={t} value={t}>
-                {tradeLabels[t]}
-              </option>
-            ))}
-          </select>
+    <div>
+      <p className="eyebrow text-brass-deep">ניהול</p>
+      <h1 className="mt-1 mb-4 font-display text-2xl text-ink sm:text-3xl">הוספת משתמש חדש</h1>
+
+      <form onSubmit={handleSubmit} className="panel panel-edge max-w-lg space-y-4 p-4 sm:p-5">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="form-label" htmlFor="name">
+              שם מלא
+            </label>
+            <input
+              id="name"
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="form-field"
+            />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="email">
+              אימייל / שם משתמש
+            </label>
+            <input
+              id="email"
+              type="email"
+              dir="ltr"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="form-field text-start"
+            />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="password">
+              סיסמה
+            </label>
+            <input
+              id="password"
+              type="password"
+              dir="ltr"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="form-field text-start"
+            />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="role">
+              הרשאת מערכת
+            </label>
+            <select
+              id="role"
+              value={role}
+              onChange={(e) => setRole(e.target.value as Role)}
+              className="form-field"
+            >
+              {roles.map((r) => (
+                <option key={r} value={r}>
+                  {roleLabels[r]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="form-label" htmlFor="trade">
+              תחום עיסוק
+            </label>
+            <select
+              id="trade"
+              value={trade}
+              onChange={(e) => setTrade(e.target.value as Trade | "")}
+              className="form-field"
+            >
+              <option value="">ללא</option>
+              {trades.map((t) => (
+                <option key={t} value={t}>
+                  {tradeLabels[t]}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {error && <p className="text-red-600 text-sm">{error}</p>}
-        {success && <p className="text-green-700 text-sm">{success}</p>}
+        {error && (
+          <p className="rounded-lg border border-brick/30 bg-brick-tint px-3 py-2 text-sm text-brick-deep">{error}</p>
+        )}
+        {success && (
+          <p className="rounded-lg border border-eucalyptus/30 bg-eucalyptus-tint px-3 py-2 text-sm text-eucalyptus-deep">
+            {success}
+          </p>
+        )}
 
-        <button
-          type="submit"
-          disabled={saving}
-          className="bg-gray-900 text-white text-sm rounded px-4 py-2 disabled:opacity-50"
-        >
+        <button type="submit" disabled={saving} className="btn btn-primary">
           {saving ? "שומר..." : "צור משתמש"}
         </button>
       </form>
