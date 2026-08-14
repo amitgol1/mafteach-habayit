@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// SQLite has no native enum support in Prisma; these fields hold string
+// constants enforced in application code — see src/constants.ts.
+// Role: "ADMIN" | "COLLABORATOR"
+// PhaseStatus: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"
+// MediaType: "IMAGE" | "VIDEO"
+// Trade: "ARCHITECT" | "CONSTRUCTION_ENGINEER" | "INTERIOR_DESIGNER" | "ELECTRICIAN"
+//        | "PLUMBER" | "COMMUNICATIONS_TECHNICIAN" | "MAIN_CONTRACTOR"
+// ProjectStage: "SKELETON" | "ELECTRICITY" | "PLUMBING" | "PLASTER" | "FLOORING"
+//               | "ALUMINUM" | "FENCES"
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String
+  trade        String? // e.g. "ELECTRICIAN", null for Admins — see Trade in src/constants.ts
+  createdAt    DateTime @default(now())
+
+  assignments  PhaseAssignment[]
+  updates      Update[]
+  participants ProjectParticipant[]
+}
+
+model Project {
+  id            Int      @id @default(autoincrement())
+  name          String
+  location      String
+  overallStatus String   @default("NOT_STARTED")
+  owners        String? // free text, project owners/clients
+  totalBudget   Float?
+  currentStage  String? // ProjectStage vocabulary — distinct from overallStatus, see src/constants.ts
+  createdAt     DateTime @default(now())
+
+  units             Unit[]
+  financialRecords  FinancialRecord[]
+  participants      ProjectParticipant[]
+}
+
+model Unit {
+  id         Int      @id @default(autoincrement())
+  projectId  Int
+  identifier String // e.g. "House A"
+  createdAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phases  Phase[]
+
+  @@index([projectId])
+}
+
+model Phase {
+  id        Int         @id @default(autoincrement())
+  unitId    Int
+  name      String // e.g. "Skeleton", "Plumbing", "Electricity"
+  status    String   @default("NOT_STARTED")
+  order     Int
+  createdAt DateTime @default(now())
+
+  unit             Unit              @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  subPhases        SubPhase[]
+  financialRecords FinancialRecord[]
+
+  @@index([unitId])
+}
+
+model SubPhase {
+  id        Int         @id @default(autoincrement())
+  phaseId   Int
+  name      String // e.g. "Underground", "Ground Floor", "Mamad"
+  status    String   @default("NOT_STARTED")
+  createdAt DateTime @default(now())
+
+  phase       Phase             @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  assignments PhaseAssignment[]
+  updates     Update[]
+
+  @@index([phaseId])
+}
+
+model PhaseAssignment {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  subPhaseId Int
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subPhase SubPhase @relation(fields: [subPhaseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subPhaseId])
+  @@index([subPhaseId])
+}
+
+model ProjectParticipant {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  userId    Int
+  trade     String // Trade vocabulary — one slot per trade per project, see src/constants.ts
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, trade])
+  @@index([userId])
+}
+
+model Update {
+  id          Int       @id @default(autoincrement())
+  subPhaseId  Int
+  userId      Int
+  messageText String?
+  mediaUrl    String? // local path under /uploads
+  mediaType   String? // "IMAGE" | "VIDEO"
+  timestamp   DateTime @default(now())
+
+  subPhase SubPhase @relation(fields: [subPhaseId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([subPhaseId])
+}
+
+model FinancialRecord {
+  id              Int      @id @default(autoincrement())
+  projectId       Int
+  phaseId         Int?
+  amountPaid      Float    @default(0)
+  totalDue        Float
+  receiptMediaUrl String? // local path under /uploads
+  timestamp       DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phase   Phase?  @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([phaseId])
+}

@@ -1,0 +1,22 @@
+node_modules/
+dist/
+build/
+
+# env
+.env
+.env.local
+
+# local db
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+
+# uploaded media (local filesystem storage)
+/uploads/*
+!/uploads/.gitkeep
+
+# logs
+*.log
+.DS_Store
+
+# local claude settings
+.claude/settings.local.json
