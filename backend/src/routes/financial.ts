@@ -12,19 +12,17 @@ financialRouter.get(
   "/projects/:projectId/financials",
   asyncHandler(async (req, res) => {
     const projectId = Number(req.params.projectId);
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { totalBudget: true },
+    });
     const records = await prisma.financialRecord.findMany({
       where: { projectId },
       orderBy: { timestamp: "asc" },
     });
-    const totals = records.reduce(
-      (acc, r) => {
-        acc.totalPaid += r.amountPaid;
-        acc.totalDue += r.totalDue;
-        return acc;
-      },
-      { totalPaid: 0, totalDue: 0 }
-    );
-    res.json({ records, totals: { ...totals, remaining: totals.totalDue - totals.totalPaid } });
+    const totalDue = project?.totalBudget ?? 0;
+    const totalPaid = records.reduce((sum, r) => sum + r.amountPaid, 0);
+    res.json({ records, totals: { totalDue, totalPaid, remaining: totalDue - totalPaid } });
   })
 );
 
@@ -33,21 +31,15 @@ financialRouter.post(
   upload.single("receipt"),
   asyncHandler(async (req, res) => {
     const projectId = Number(req.params.projectId);
-    const { phaseId, amountPaid, totalDue } = req.body as {
+    const { phaseId, amountPaid } = req.body as {
       phaseId?: string;
       amountPaid?: string;
-      totalDue?: string;
     };
-    if (totalDue === undefined) {
-      res.status(400).json({ error: "totalDue is required" });
-      return;
-    }
     const record = await prisma.financialRecord.create({
       data: {
         projectId,
         phaseId: phaseId ? Number(phaseId) : null,
         amountPaid: amountPaid ? Number(amountPaid) : 0,
-        totalDue: Number(totalDue),
         receiptMediaUrl: req.file ? publicUploadPath(req.file.filename) : null,
       },
     });

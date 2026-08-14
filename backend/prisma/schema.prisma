@@ -134,7 +134,6 @@ model FinancialRecord {
   projectId       Int
   phaseId         Int?
   amountPaid      Float    @default(0)
-  totalDue        Float
   receiptMediaUrl String? // local path under /uploads
   timestamp       DateTime @default(now())
 

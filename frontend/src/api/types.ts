@@ -89,7 +89,6 @@ export interface FinancialRecord {
   projectId: number;
   phaseId: number | null;
   amountPaid: number;
-  totalDue: number;
   receiptMediaUrl: string | null;
   timestamp: string;
 }

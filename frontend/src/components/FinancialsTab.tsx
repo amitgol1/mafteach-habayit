@@ -11,7 +11,6 @@ const currency = new Intl.NumberFormat("he-IL", {
 export function FinancialsTab({ projectId }: { projectId: number }) {
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [amountPaid, setAmountPaid] = useState("");
-  const [totalDue, setTotalDue] = useState("");
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -23,18 +22,16 @@ export function FinancialsTab({ projectId }: { projectId: number }) {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!totalDue) return;
+    if (!amountPaid) return;
     setSaving(true);
     const formData = new FormData();
-    formData.append("totalDue", totalDue);
-    if (amountPaid) formData.append("amountPaid", amountPaid);
+    formData.append("amountPaid", amountPaid);
     const file = fileRef.current?.files?.[0];
     if (file) formData.append("receipt", file);
 
     try {
       await api.post(`/projects/${projectId}/financials`, formData);
       setAmountPaid("");
-      setTotalDue("");
       if (fileRef.current) fileRef.current.value = "";
       reload();
     } finally {
@@ -62,35 +59,20 @@ export function FinancialsTab({ projectId }: { projectId: number }) {
       </div>
 
       <form onSubmit={handleSubmit} className="panel space-y-4 p-4">
-        <h3 className="font-display text-lg text-ink">הוספת רשומה כספית</h3>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="form-label" htmlFor="totalDue">
-              סכום לתשלום
-            </label>
-            <input
-              id="totalDue"
-              type="number"
-              step="0.01"
-              required
-              value={totalDue}
-              onChange={(e) => setTotalDue(e.target.value)}
-              className="form-field numeric"
-            />
-          </div>
-          <div>
-            <label className="form-label" htmlFor="amountPaid">
-              סכום ששולם
-            </label>
-            <input
-              id="amountPaid"
-              type="number"
-              step="0.01"
-              value={amountPaid}
-              onChange={(e) => setAmountPaid(e.target.value)}
-              className="form-field numeric"
-            />
-          </div>
+        <h3 className="font-display text-lg text-ink">הוספת תשלום</h3>
+        <div>
+          <label className="form-label" htmlFor="amountPaid">
+            סכום ששולם
+          </label>
+          <input
+            id="amountPaid"
+            type="number"
+            step="0.01"
+            required
+            value={amountPaid}
+            onChange={(e) => setAmountPaid(e.target.value)}
+            className="form-field numeric"
+          />
         </div>
         <div>
           <label className="form-label" htmlFor="receipt">
@@ -99,20 +81,16 @@ export function FinancialsTab({ projectId }: { projectId: number }) {
           <input id="receipt" ref={fileRef} type="file" accept="image/*" className="file-field" />
         </div>
         <button type="submit" disabled={saving} className="btn btn-primary">
-          {saving ? "שומר..." : "הוספת רשומה"}
+          {saving ? "שומר..." : "הוספת תשלום"}
         </button>
       </form>
 
       <div className="panel divide-y divide-limestone p-0">
-        {summary.records.length === 0 && <p className="p-4 text-sm text-ink-faint">אין רשומות עדיין</p>}
+        {summary.records.length === 0 && <p className="p-4 text-sm text-ink-faint">אין תשלומים עדיין</p>}
         {summary.records.map((r) => (
           <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
             <div className="min-w-0">
-              <p className="numeric text-ink">
-                {currency.format(r.amountPaid)}
-                <span className="text-ink-faint"> מתוך </span>
-                {currency.format(r.totalDue)}
-              </p>
+              <p className="numeric text-ink">{currency.format(r.amountPaid)}</p>
               <time className="numeric text-xs text-ink-faint" dateTime={r.timestamp}>
                 {new Date(r.timestamp).toLocaleString("he-IL")}
               </time>
