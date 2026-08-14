@@ -10,9 +10,21 @@ build/
 backend/prisma/dev.db
 backend/prisma/dev.db-journal
 
+# test/e2e databases (isolated from dev.db, recreated on every run)
+backend/prisma/test.db
+backend/prisma/test.db-journal
+backend/prisma/e2e.db
+backend/prisma/e2e.db-journal
+backend/tests-tmp/
+
 # uploaded media (local filesystem storage)
 /uploads/*
 !/uploads/.gitkeep
+
+# test/e2e tooling output
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
 
 # logs
 *.log
