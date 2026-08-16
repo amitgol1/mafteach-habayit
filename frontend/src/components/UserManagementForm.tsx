@@ -3,7 +3,11 @@ import { api } from "../api/client";
 import type { Role, Trade, User } from "../api/types";
 import { roleLabels, roles, tradeLabels, trades } from "../constants/labels";
 
-export function UserManagementForm() {
+interface UserManagementFormProps {
+  onCreated?: () => void;
+}
+
+export function UserManagementForm({ onCreated }: UserManagementFormProps = {}) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,6 +38,7 @@ export function UserManagementForm() {
       setPassword("");
       setRole("COLLABORATOR");
       setTrade("");
+      onCreated?.();
     } catch (err) {
       const message =
         (err as { response?: { data?: { error?: string } } }).response?.data?.error ?? "אירעה שגיאה ביצירת המשתמש";

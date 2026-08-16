@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Layout } from "../components/Layout";
 import { ProjectCreationForm } from "../components/ProjectCreationForm";
+import { UserList } from "../components/UserList";
 import { UserManagementForm } from "../components/UserManagementForm";
 
 type Tab = "project" | "user";
@@ -15,6 +16,7 @@ const tabLabels: Record<Tab, string> = {
 export function AdminPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("project");
+  const [userRefreshSignal, setUserRefreshSignal] = useState(0);
 
   if (user?.role !== "ADMIN") {
     return <Navigate to="/" replace />;
@@ -39,7 +41,12 @@ export function AdminPage() {
       </div>
 
       {tab === "project" && <ProjectCreationForm />}
-      {tab === "user" && <UserManagementForm />}
+      {tab === "user" && (
+        <div>
+          <UserManagementForm onCreated={() => setUserRefreshSignal((s) => s + 1)} />
+          <UserList refreshSignal={userRefreshSignal} />
+        </div>
+      )}
     </Layout>
   );
 }
