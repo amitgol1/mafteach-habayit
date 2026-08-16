@@ -12,11 +12,10 @@ import { StatusBadge } from "../components/StatusBadge";
 import { SubPhaseFeed } from "../components/SubPhaseFeed";
 import { UpdatesFeed } from "../components/UpdatesFeed";
 
-type Tab = "overview" | "updates" | "financials";
+type Tab = "overview" | "financials";
 
 const tabLabels: Record<Tab, string> = {
   overview: "סקירה",
-  updates: "עדכונים",
   financials: "כספים",
 };
 
@@ -29,7 +28,7 @@ export function ProjectPage() {
   const [tab, setTab] = useState<Tab>("overview");
   const [editing, setEditing] = useState(false);
   const isManager = user?.role === "SUPER_ADMIN" || user?.role === "ENTREPRENEUR";
-  const visibleTabs: Tab[] = isManager ? ["overview", "updates", "financials"] : ["overview", "updates"];
+  const visibleTabs: Tab[] = isManager ? ["overview", "financials"] : ["overview"];
 
   useEffect(() => {
     fetchProject();
@@ -90,21 +89,23 @@ export function ProjectPage() {
         />
       )}
 
-      <div className="mb-6 flex gap-1 border-b border-limestone-deep">
-        {visibleTabs.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={`relative px-4 pb-2.5 text-sm font-medium transition-colors ${
-              tab === t ? "text-ink" : "text-ink-faint hover:text-ink-soft"
-            }`}
-          >
-            {tabLabels[t]}
-            {tab === t && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brass" />}
-          </button>
-        ))}
-      </div>
+      {visibleTabs.length > 1 && (
+        <div className="mb-6 flex gap-1 border-b border-limestone-deep">
+          {visibleTabs.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`relative px-4 pb-2.5 text-sm font-medium transition-colors ${
+                tab === t ? "text-ink" : "text-ink-faint hover:text-ink-soft"
+              }`}
+            >
+              {tabLabels[t]}
+              {tab === t && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brass" />}
+            </button>
+          ))}
+        </div>
+      )}
 
       {tab === "overview" && (
         <div className="grid gap-6 md:grid-cols-2">
@@ -120,12 +121,6 @@ export function ProjectPage() {
               <UpdatesFeed feedPath={`/projects/${project.id}/updates`} />
             )}
           </div>
-        </div>
-      )}
-
-      {tab === "updates" && (
-        <div className="panel h-[32rem] p-4 md:h-[38rem]">
-          <UpdatesFeed feedPath={`/projects/${project.id}/updates`} />
         </div>
       )}
 

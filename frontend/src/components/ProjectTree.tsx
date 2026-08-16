@@ -4,7 +4,7 @@ import { StatusBadge } from "./StatusBadge";
 interface Props {
   project: Project;
   selectedSubPhaseId: number | null;
-  onSelectSubPhase: (id: number) => void;
+  onSelectSubPhase: (id: number | null) => void;
 }
 
 export function ProjectTree({ project, selectedSubPhaseId, onSelectSubPhase }: Props) {
@@ -29,7 +29,7 @@ export function ProjectTree({ project, selectedSubPhaseId, onSelectSubPhase }: P
                         <li key={subPhase.id}>
                           <button
                             type="button"
-                            onClick={() => onSelectSubPhase(subPhase.id)}
+                            onClick={() => onSelectSubPhase(selected ? null : subPhase.id)}
                             aria-current={selected}
                             className={`flex w-full items-center justify-between gap-2 border-s-2 px-3 py-2 text-start transition-colors ${
                               selected

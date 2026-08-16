@@ -22,13 +22,11 @@ test("project-level updates tab is independent from a sub-phase's feed", async (
   await page.goto(`/projects/${project.id}`);
 
   const projectMessage = `עדכון פרויקט ${Date.now()}`;
-  await page.getByRole("button", { name: "עדכונים" }).click();
   await expect(page.getByRole("heading", { name: "יומן עדכונים" })).toBeVisible();
   await page.getByPlaceholder("תיאור...").fill(projectMessage);
   await page.getByRole("button", { name: "שליחה" }).click();
   await expect(page.getByText(projectMessage)).toBeVisible();
 
-  await page.getByRole("button", { name: "סקירה" }).click();
   await page.getByText(subPhase.name, { exact: true }).click();
   await expect(page.getByRole("heading", { name: "יומן עדכונים" })).toBeVisible();
   await expect(page.getByText(projectMessage)).not.toBeVisible();
@@ -38,7 +36,7 @@ test("project-level updates tab is independent from a sub-phase's feed", async (
   await page.getByRole("button", { name: "שליחה" }).click();
   await expect(page.getByText(subPhaseMessage)).toBeVisible();
 
-  await page.getByRole("button", { name: "עדכונים" }).click();
+  await page.getByText(subPhase.name, { exact: true }).click();
   await expect(page.getByText(projectMessage)).toBeVisible();
   await expect(page.getByText(subPhaseMessage)).not.toBeVisible();
 });
@@ -69,7 +67,6 @@ test("a collaborator assigned as a project participant can view and post project
   await expect(page.getByRole("button", { name: "כספים" })).toHaveCount(0);
 
   const message = `עדכון שיתופי ${Date.now()}`;
-  await page.getByRole("button", { name: "עדכונים" }).click();
   await page.getByPlaceholder("תיאור...").fill(message);
   await page.getByRole("button", { name: "שליחה" }).click();
   await expect(page.getByText(message)).toBeVisible();
