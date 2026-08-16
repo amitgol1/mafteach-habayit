@@ -117,9 +117,7 @@ export function ProjectPage() {
             {selectedSubPhaseId ? (
               <SubPhaseFeed subPhaseId={selectedSubPhaseId} />
             ) : (
-              <div className="grid h-full place-items-center text-center">
-                <p className="max-w-[15rem] text-sm text-ink-faint">בחרו תת-שלב מהעץ כדי לראות את יומן העדכונים.</p>
-              </div>
+              <UpdatesFeed feedPath={`/projects/${project.id}/updates`} />
             )}
           </div>
         </div>
