@@ -14,12 +14,14 @@ function activePhase(project: Project): Phase | null {
 export function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    api.get<Project[]>("/projects").then((res) => {
-      setProjects(res.data);
-      setLoading(false);
-    });
+    api
+      .get<Project[]>("/projects")
+      .then((res) => setProjects(res.data))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
   }, []);
 
   return (
@@ -30,7 +32,8 @@ export function Dashboard() {
       </div>
 
       {loading && <p className="text-sm text-ink-soft">טוען...</p>}
-      {!loading && projects.length === 0 && (
+      {error && <p className="text-sm text-brick-deep">אירעה שגיאה בטעינת הפרויקטים. נסו לרענן את הדף.</p>}
+      {!loading && !error && projects.length === 0 && (
         <div className="panel p-8 text-center">
           <p className="text-sm text-ink-soft">אין פרויקטים עדיין</p>
         </div>

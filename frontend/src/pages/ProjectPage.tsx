@@ -22,6 +22,7 @@ export function ProjectPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [selectedSubPhaseId, setSelectedSubPhaseId] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [editing, setEditing] = useState(false);
@@ -31,7 +32,19 @@ export function ProjectPage() {
   }, [id]);
 
   function fetchProject() {
-    api.get<Project>(`/projects/${id}`).then((res) => setProject(res.data));
+    setLoadError(false);
+    api
+      .get<Project>(`/projects/${id}`)
+      .then((res) => setProject(res.data))
+      .catch(() => setLoadError(true));
+  }
+
+  if (loadError) {
+    return (
+      <Layout>
+        <p className="text-sm text-brick-deep">אירעה שגיאה בטעינת הפרויקט. נסו לרענן את הדף.</p>
+      </Layout>
+    );
   }
 
   if (!project) {

@@ -57,12 +57,14 @@ export function ProjectFormFields({
     return map;
   });
   const [loadingUsers, setLoadingUsers] = useState(true);
+  const [usersLoadError, setUsersLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     setLoadingUsers(true);
+    setUsersLoadError(false);
     Promise.all(
       trades.map((trade) =>
         api.get<User[]>("/users/by-trade", { params: { trade } }).then((res) => [trade, res.data] as const)
@@ -73,6 +75,7 @@ export function ProjectFormFields({
         for (const [trade, users] of results) map[trade] = users;
         setUsersByTrade(map);
       })
+      .catch(() => setUsersLoadError(true))
       .finally(() => setLoadingUsers(false));
   }, []);
 
@@ -199,7 +202,8 @@ export function ProjectFormFields({
       <div className="border-t border-limestone pt-4">
         <h2 className="eyebrow mb-3 text-brass-deep">צוות הפרויקט</h2>
         {loadingUsers && <p className="text-sm text-ink-soft">טוען משתמשים...</p>}
-        {!loadingUsers && (
+        {usersLoadError && <p className="text-sm text-brick-deep">אירעה שגיאה בטעינת המשתמשים.</p>}
+        {!loadingUsers && !usersLoadError && (
           <div className="grid gap-4 sm:grid-cols-2">
             {trades.map((trade) => {
               const users = usersByTrade[trade] ?? [];

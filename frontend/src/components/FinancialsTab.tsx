@@ -10,12 +10,17 @@ const currency = new Intl.NumberFormat("he-IL", {
 
 export function FinancialsTab({ projectId }: { projectId: number }) {
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [amountPaid, setAmountPaid] = useState("");
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function reload() {
-    api.get<FinancialSummary>(`/projects/${projectId}/financials`).then((res) => setSummary(res.data));
+    setLoadError(false);
+    api
+      .get<FinancialSummary>(`/projects/${projectId}/financials`)
+      .then((res) => setSummary(res.data))
+      .catch(() => setLoadError(true));
   }
 
   useEffect(reload, [projectId]);
@@ -39,6 +44,7 @@ export function FinancialsTab({ projectId }: { projectId: number }) {
     }
   }
 
+  if (loadError) return <p className="text-sm text-brick-deep">אירעה שגיאה בטעינת הנתונים הכספיים.</p>;
   if (!summary) return <p className="text-sm text-ink-soft">טוען...</p>;
 
   const totals = [

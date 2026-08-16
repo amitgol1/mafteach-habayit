@@ -7,15 +7,18 @@ export function SubPhaseFeed({ subPhaseId }: { subPhaseId: number }) {
   const [updates, setUpdates] = useState<Update[]>([]);
   const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [posting, setPosting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function reload() {
     setLoading(true);
-    api.get<Update[]>(`/sub-phases/${subPhaseId}/updates`).then((res) => {
-      setUpdates(res.data);
-      setLoading(false);
-    });
+    setLoadError(false);
+    api
+      .get<Update[]>(`/sub-phases/${subPhaseId}/updates`)
+      .then((res) => setUpdates(res.data))
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
@@ -49,7 +52,10 @@ export function SubPhaseFeed({ subPhaseId }: { subPhaseId: number }) {
 
       <div className="mb-3 flex-1 space-y-3 overflow-y-auto">
         {loading && <p className="text-sm text-ink-soft">טוען...</p>}
-        {!loading && updates.length === 0 && <p className="text-sm text-ink-faint">אין עדכונים עדיין</p>}
+        {loadError && <p className="text-sm text-brick-deep">אירעה שגיאה בטעינת העדכונים.</p>}
+        {!loading && !loadError && updates.length === 0 && (
+          <p className="text-sm text-ink-faint">אין עדכונים עדיין</p>
+        )}
         {updates.map((u) => {
           const trade = tradeLabel(u.user.trade);
           return (
