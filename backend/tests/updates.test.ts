@@ -119,9 +119,9 @@ describe("POST /api/sub-phases/:id/updates", () => {
     expect(res.status).toBe(201);
   });
 
-  it("rejects media over the 15MB limit with a 400, not a 500", async () => {
+  it("rejects media over the 100MB limit with a 400, not a 500", async () => {
     const { subPhase } = await buildSubPhase(entrepreneur.id);
-    const oversized = Buffer.alloc(16 * 1024 * 1024);
+    const oversized = Buffer.alloc(101 * 1024 * 1024);
 
     const res = await request(app)
       .post(`/api/sub-phases/${subPhase.id}/updates`)
@@ -331,43 +331,3 @@ describe("GET /api/projects/:projectId/updates pagination", () => {
   });
 });
 
-describe("financial.ts receipt uploads are unaffected by the 15MB update-media limit", () => {
-  let admin: Awaited<ReturnType<typeof createUser>>;
-  let entrepreneur: Awaited<ReturnType<typeof createUser>>;
-
-  beforeEach(async () => {
-    await resetDb();
-    admin = await createUser({ role: Role.SUPER_ADMIN });
-    entrepreneur = await createUser({ role: Role.ENTREPRENEUR, email: "entrepreneur@test.local" });
-  });
-
-  it("accepts a receipt larger than 15MB (still governed by the 100MB financial limit)", async () => {
-    const project = await prisma.project.create({
-      data: { name: "P", location: "L", totalBudget: 1000, entrepreneurId: entrepreneur.id },
-    });
-    const overFifteenMb = Buffer.alloc(16 * 1024 * 1024);
-
-    const res = await request(app)
-      .post(`/api/projects/${project.id}/financials`)
-      .set("Authorization", authHeader(admin))
-      .field("amountPaid", "100")
-      .attach("receipt", overFifteenMb, { filename: "receipt.png", contentType: "image/png" });
-
-    expect(res.status).toBe(201);
-    expect(res.body.receiptMediaUrl).toMatch(/^\/uploads\//);
-  });
-
-  it("still accepts a small receipt via tinyPng", async () => {
-    const project = await prisma.project.create({
-      data: { name: "P", location: "L", totalBudget: 1000, entrepreneurId: entrepreneur.id },
-    });
-
-    const res = await request(app)
-      .post(`/api/projects/${project.id}/financials`)
-      .set("Authorization", authHeader(admin))
-      .field("amountPaid", "50")
-      .attach("receipt", tinyPng, { filename: "receipt.png", contentType: "image/png" });
-
-    expect(res.status).toBe(201);
-  });
-});

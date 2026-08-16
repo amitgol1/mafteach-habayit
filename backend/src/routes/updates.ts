@@ -3,7 +3,7 @@ import { Role } from "../constants";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { AuthedRequest, requireAuth } from "../middleware/auth";
 import { prisma } from "../prisma";
-import { mediaTypeFromMime, publicUploadPath, uploadUpdateMedia } from "../utils/upload";
+import { mediaTypeFromMime, publicUploadPath, upload } from "../utils/upload";
 import { isAssignedToSubPhase } from "../utils/subPhaseAccess";
 import { assertProjectOwnership, canAccessProject, getProjectForSubPhase } from "../utils/tenantScope";
 
@@ -101,7 +101,7 @@ updatesRouter.get(
 updatesRouter.post(
   "/sub-phases/:subPhaseId/updates",
   requireSubPhaseAccess(),
-  uploadUpdateMedia.single("media"),
+  upload.single("media"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const subPhaseId = Number(req.params.subPhaseId);
     const { subject, description } = req.body as { subject?: string; description?: string };
@@ -140,7 +140,7 @@ updatesRouter.get(
 updatesRouter.post(
   "/projects/:projectId/updates",
   requireProjectAccess(),
-  uploadUpdateMedia.single("media"),
+  upload.single("media"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const projectId = Number(req.params.projectId);
     const { subject, description } = req.body as { subject?: string; description?: string };

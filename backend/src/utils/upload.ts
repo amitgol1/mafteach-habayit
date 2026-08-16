@@ -57,12 +57,6 @@ export const upload = multer({
   fileFilter: mimeTypeFilter,
 });
 
-export const uploadUpdateMedia = multer({
-  storage,
-  limits: { fileSize: 15 * 1024 * 1024 },
-  fileFilter: mimeTypeFilter,
-});
-
 export function mediaTypeFromMime(mimetype: string): "IMAGE" | "VIDEO" | "DOCUMENT" {
   if (mimetype.startsWith("video/")) return "VIDEO";
   if (documentMimeTypes.has(mimetype)) return "DOCUMENT";

@@ -36,8 +36,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   }
   if (err instanceof multer.MulterError) {
     if (err.code === "LIMIT_FILE_SIZE") {
-      const maxMb = err.field === "receipt" ? 100 : 15;
-      res.status(400).json({ error: `הקובץ גדול מדי (מקסימום ${maxMb}MB)` });
+      res.status(400).json({ error: "הקובץ גדול מדי (מקסימום 100MB)" });
       return;
     }
     res.status(400).json({ error: err.message });

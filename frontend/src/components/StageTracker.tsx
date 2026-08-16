@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ProjectStage } from "../api/types";
 import { projectStageLabel, projectStageLabels, projectStages } from "../constants/labels";
 
@@ -56,6 +57,7 @@ function Connector({ filled, vertical }: { filled: boolean; vertical?: boolean }
 }
 
 export function StageTracker({ currentStage }: { currentStage: ProjectStage | string | null }) {
+  const [expanded, setExpanded] = useState(false);
   // -1 covers both "no stage set" and a legacy value outside the current list:
   // nothing is marked as reached rather than throwing.
   const currentIndex = currentStage ? projectStages.indexOf(currentStage as ProjectStage) : -1;
@@ -87,25 +89,62 @@ export function StageTracker({ currentStage }: { currentStage: ProjectStage | st
         )}
       </div>
 
-      {/* Phone: the sequence runs down a plumb line. */}
-      <ol className="sm:hidden">
-        {projectStages.map((stage, index) => {
-          const state = stateOf(index);
-          return (
-            <li key={stage} className="flex gap-3">
-              <div className="flex flex-col items-center">
-                <Marker index={index} state={state} />
-                {index < projectStages.length - 1 && (
-                  <Connector vertical filled={currentIndex > -1 && index < currentIndex} />
-                )}
-              </div>
-              <span className={`pt-1.5 text-sm ${labelStyles[state]} ${index < projectStages.length - 1 ? "pb-4" : ""}`}>
-                {projectStageLabels[stage]}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+      {/* Phone: collapsed to just the current stage; tap to see the full sequence. */}
+      <div className="sm:hidden" data-testid="stage-tracker-mobile">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="flex w-full items-center gap-3 rounded-lg py-1 text-start"
+        >
+          {!expanded && (
+            <Marker
+              index={Math.max(currentIndex, 0)}
+              state={currentIndex === -1 ? "upcoming" : "current"}
+            />
+          )}
+          <span className="flex-1 text-sm font-medium text-ink">
+            {expanded
+              ? "הסתר שלבים"
+              : currentIndex === -1
+                ? isUnknownStage
+                  ? `שלב לא מוכר: ${currentStage}`
+                  : "טרם נקבע שלב"
+                : projectStageLabels[projectStages[currentIndex]]}
+          </span>
+          <svg
+            viewBox="0 0 24 24"
+            className={`size-4 shrink-0 text-ink-faint transition-transform ${expanded ? "rotate-180" : ""}`}
+            fill="none"
+            aria-hidden="true"
+          >
+            <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {expanded && (
+          <ol className="mt-3">
+            {projectStages.map((stage, index) => {
+              const state = stateOf(index);
+              return (
+                <li key={stage} className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <Marker index={index} state={state} />
+                    {index < projectStages.length - 1 && (
+                      <Connector vertical filled={currentIndex > -1 && index < currentIndex} />
+                    )}
+                  </div>
+                  <span
+                    className={`pt-1.5 text-sm ${labelStyles[state]} ${index < projectStages.length - 1 ? "pb-4" : ""}`}
+                  >
+                    {projectStageLabels[stage]}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
 
       {/* Tablet and up: the same markers set out along a horizontal line. */}
       <ol className="hidden sm:flex sm:items-start">
