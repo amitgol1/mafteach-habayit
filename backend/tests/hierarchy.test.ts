@@ -84,7 +84,7 @@ describe("units/phases/sub-phases", () => {
       const createRes = await request(app)
         .post("/api/phases")
         .set("Authorization", authHeader(admin))
-        .send({ unitId: unit.id, name: "Skeleton", order: 1 });
+        .send({ unitId: unit.id, name: "SKELETON", order: 1 });
       expect(createRes.status).toBe(201);
       const phaseId = createRes.body.id;
 
@@ -107,8 +107,31 @@ describe("units/phases/sub-phases", () => {
       const res = await request(app)
         .post("/api/phases")
         .set("Authorization", authHeader(collaborator))
-        .send({ unitId: unit.id, name: "Skeleton", order: 1 });
+        .send({ unitId: unit.id, name: "SKELETON", order: 1 });
       expect(res.status).toBe(403);
+    });
+
+    it("rejects a phase name that isn't one of the fixed construction stages", async () => {
+      const project = await prisma.project.create({ data: { name: "P", location: "L", entrepreneurId: entrepreneur.id } });
+      const unit = await prisma.unit.create({ data: { projectId: project.id, identifier: "House A" } });
+
+      const createRes = await request(app)
+        .post("/api/phases")
+        .set("Authorization", authHeader(admin))
+        .send({ unitId: unit.id, name: "Custom Phase", order: 1 });
+      expect(createRes.status).toBe(400);
+
+      const validRes = await request(app)
+        .post("/api/phases")
+        .set("Authorization", authHeader(admin))
+        .send({ unitId: unit.id, name: "SKELETON", order: 1 });
+      expect(validRes.status).toBe(201);
+
+      const patchRes = await request(app)
+        .patch(`/api/phases/${validRes.body.id}`)
+        .set("Authorization", authHeader(admin))
+        .send({ name: "Not A Real Stage" });
+      expect(patchRes.status).toBe(400);
     });
   });
 
@@ -116,7 +139,7 @@ describe("units/phases/sub-phases", () => {
     async function buildHierarchy() {
       const project = await prisma.project.create({ data: { name: "P", location: "L", entrepreneurId: entrepreneur.id } });
       const unit = await prisma.unit.create({ data: { projectId: project.id, identifier: "House A" } });
-      const phase = await prisma.phase.create({ data: { unitId: unit.id, name: "Skeleton", order: 1 } });
+      const phase = await prisma.phase.create({ data: { unitId: unit.id, name: "SKELETON", order: 1 } });
       return { project, unit, phase };
     }
 
@@ -231,6 +254,19 @@ describe("units/phases/sub-phases", () => {
         .get(`/api/sub-phases/${subPhase.id}`)
         .set("Authorization", authHeader(admin));
       expect(adminRes.status).toBe(200);
+    });
+
+    it("GET /:id succeeds for a COLLABORATOR assigned elsewhere in the same project, not this sub-phase", async () => {
+      const { phase } = await buildHierarchy();
+      const assignedSubPhase = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Underground" } });
+      const otherSubPhase = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Ground Floor" } });
+      const collaborator = await createUser({ role: Role.COLLABORATOR, trade: Trade.ELECTRICIAN });
+      await prisma.phaseAssignment.create({ data: { userId: collaborator.id, subPhaseId: assignedSubPhase.id } });
+
+      const res = await request(app)
+        .get(`/api/sub-phases/${otherSubPhase.id}`)
+        .set("Authorization", authHeader(collaborator));
+      expect(res.status).toBe(200);
     });
   });
 });

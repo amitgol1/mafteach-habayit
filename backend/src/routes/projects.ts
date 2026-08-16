@@ -3,7 +3,6 @@ import { PhaseStatus, ProjectStage, Role, Trade } from "../constants";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { AuthedRequest, requireAuth } from "../middleware/auth";
 import { prisma } from "../prisma";
-import { getAssignedSubPhaseIds } from "../utils/subPhaseAccess";
 import { assertProjectOwnership, canAccessProject, projectTenantFilter, requireRole } from "../utils/tenantScope";
 
 export const projectsRouter = Router();
@@ -65,26 +64,6 @@ projectsRouter.get(
   asyncHandler(async (req: AuthedRequest, res) => {
     const where = await projectTenantFilter(req.user!);
 
-    if (req.user!.role === Role.COLLABORATOR) {
-      const subPhaseIds = await getAssignedSubPhaseIds(req.user!.id);
-      const projects = await prisma.project.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        include: {
-          units: {
-            include: {
-              phases: {
-                orderBy: { order: "asc" },
-                include: { subPhases: { where: { id: { in: subPhaseIds } } } },
-              },
-            },
-          },
-        },
-      });
-      res.json(projects);
-      return;
-    }
-
     const projects = await prisma.project.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -113,18 +92,6 @@ projectsRouter.get(
     if (!(await canAccessProject(project, req.user!))) {
       res.status(403).json({ error: "Not assigned to this project" });
       return;
-    }
-
-    if (req.user!.role === Role.COLLABORATOR) {
-      const subPhaseIds = new Set(await getAssignedSubPhaseIds(req.user!.id));
-      project.units = project.units
-        .map((u) => ({
-          ...u,
-          phases: u.phases
-            .map((p) => ({ ...p, subPhases: p.subPhases.filter((sp) => subPhaseIds.has(sp.id)) }))
-            .filter((p) => p.subPhases.length > 0),
-        }))
-        .filter((u) => u.phases.length > 0);
     }
 
     res.json(project);

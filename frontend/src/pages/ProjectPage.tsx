@@ -111,8 +111,10 @@ export function ProjectPage() {
         <div className="grid gap-6 md:grid-cols-2">
           <ProjectTree
             project={project}
+            isManager={isManager}
             selectedSubPhaseId={selectedSubPhaseId}
             onSelectSubPhase={setSelectedSubPhaseId}
+            onChanged={fetchProject}
           />
           <div className="panel h-[32rem] p-4 md:h-[38rem]">
             {selectedSubPhaseId ? (

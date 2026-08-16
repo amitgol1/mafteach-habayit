@@ -134,6 +134,14 @@ export function apiCreateSubPhase(token: string, phaseId: number, name: string):
   return request("/sub-phases", { method: "POST", headers: authHeaders(token), body: JSON.stringify({ phaseId, name }) });
 }
 
+export function apiAssignSubPhase(token: string, subPhaseId: number, userId: number): Promise<void> {
+  return request(`/sub-phases/${subPhaseId}/assignments`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ userId }),
+  });
+}
+
 export interface ApiUpdate {
   id: number;
   subject: string | null;

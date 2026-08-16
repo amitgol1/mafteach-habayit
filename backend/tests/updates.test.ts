@@ -8,7 +8,7 @@ import { authHeader, createUser, resetDb, tinyPng } from "./helpers";
 async function buildSubPhase(entrepreneurId: number) {
   const project = await prisma.project.create({ data: { name: "P", location: "L", entrepreneurId } });
   const unit = await prisma.unit.create({ data: { projectId: project.id, identifier: "House A" } });
-  const phase = await prisma.phase.create({ data: { unitId: unit.id, name: "Skeleton", order: 1 } });
+  const phase = await prisma.phase.create({ data: { unitId: unit.id, name: "SKELETON", order: 1 } });
   const subPhase = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Underground" } });
   return { project, subPhase };
 }
@@ -131,6 +131,67 @@ describe("POST /api/sub-phases/:id/updates", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBeTruthy();
+  });
+});
+
+describe("GET /api/sub-phases/:id/updates (view access)", () => {
+  let admin: Awaited<ReturnType<typeof createUser>>;
+  let entrepreneur: Awaited<ReturnType<typeof createUser>>;
+
+  beforeEach(async () => {
+    await resetDb();
+    admin = await createUser({ role: Role.SUPER_ADMIN });
+    entrepreneur = await createUser({ role: Role.ENTREPRENEUR, email: "entrepreneur@test.local" });
+  });
+
+  it("a COLLABORATOR assigned elsewhere in the same project can still view this sub-phase's feed", async () => {
+    const { project, subPhase: viewedSubPhase } = await buildSubPhase(entrepreneur.id);
+    const phase = await prisma.phase.findFirstOrThrow({ where: { unit: { projectId: project.id } } });
+    const assignedSubPhase = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Ground Floor" } });
+    const collaborator = await createUser({ role: Role.COLLABORATOR, trade: Trade.ELECTRICIAN });
+    await prisma.phaseAssignment.create({ data: { userId: collaborator.id, subPhaseId: assignedSubPhase.id } });
+
+    const res = await request(app)
+      .get(`/api/sub-phases/${viewedSubPhase.id}/updates`)
+      .set("Authorization", authHeader(collaborator));
+    expect(res.status).toBe(200);
+  });
+
+  it("a COLLABORATOR who is a ProjectParticipant (no sub-phase assignment) can view any sub-phase's feed", async () => {
+    const { project, subPhase } = await buildSubPhase(entrepreneur.id);
+    const collaborator = await createUser({ role: Role.COLLABORATOR, trade: Trade.ELECTRICIAN });
+    await prisma.projectParticipant.create({
+      data: { projectId: project.id, userId: collaborator.id, trade: Trade.ELECTRICIAN },
+    });
+
+    const res = await request(app)
+      .get(`/api/sub-phases/${subPhase.id}/updates`)
+      .set("Authorization", authHeader(collaborator));
+    expect(res.status).toBe(200);
+  });
+
+  it("blocks a COLLABORATOR with no connection to the project at all", async () => {
+    const { subPhase } = await buildSubPhase(entrepreneur.id);
+    const collaborator = await createUser({ role: Role.COLLABORATOR, trade: Trade.ELECTRICIAN });
+
+    const res = await request(app)
+      .get(`/api/sub-phases/${subPhase.id}/updates`)
+      .set("Authorization", authHeader(collaborator));
+    expect(res.status).toBe(403);
+  });
+
+  it("still blocks that same COLLABORATOR from posting to it (view access isn't write access)", async () => {
+    const { project, subPhase: viewedSubPhase } = await buildSubPhase(entrepreneur.id);
+    const phase = await prisma.phase.findFirstOrThrow({ where: { unit: { projectId: project.id } } });
+    const assignedSubPhase = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Ground Floor" } });
+    const collaborator = await createUser({ role: Role.COLLABORATOR, trade: Trade.ELECTRICIAN });
+    await prisma.phaseAssignment.create({ data: { userId: collaborator.id, subPhaseId: assignedSubPhase.id } });
+
+    const res = await request(app)
+      .post(`/api/sub-phases/${viewedSubPhase.id}/updates`)
+      .set("Authorization", authHeader(collaborator))
+      .send({ description: "Should still be blocked" });
+    expect(res.status).toBe(403);
   });
 });
 

@@ -13,7 +13,7 @@ test("posting a text update in a sub-phase feed shows it in the list", async ({ 
   const projectName = `פרויקט יומן ${Date.now()}`;
   const project = await apiCreateProject(token, { name: projectName, location: "בת ים" });
   const unit = await apiCreateUnit(token, project.id, "יחידה 1");
-  const phase = await apiCreatePhase(token, unit.id, "שלד", 1);
+  const phase = await apiCreatePhase(token, unit.id, "SKELETON", 1);
   const subPhase = await apiCreateSubPhase(token, phase.id, "יציקת יסודות");
 
   await loginAsAdminViaUi(page);
@@ -34,7 +34,7 @@ test("posting an update with a subject shows both subject and description", asyn
   const projectName = `פרויקט יומן ${Date.now()}`;
   const project = await apiCreateProject(token, { name: projectName, location: "בת ים" });
   const unit = await apiCreateUnit(token, project.id, "יחידה 1");
-  const phase = await apiCreatePhase(token, unit.id, "שלד", 1);
+  const phase = await apiCreatePhase(token, unit.id, "SKELETON", 1);
   const subPhase = await apiCreateSubPhase(token, phase.id, "יציקת יסודות");
 
   await loginAsAdminViaUi(page);
@@ -57,7 +57,7 @@ test("an update with media shows a download link pointing at the uploaded file",
   const projectName = `פרויקט יומן ${Date.now()}`;
   const project = await apiCreateProject(token, { name: projectName, location: "בת ים" });
   const unit = await apiCreateUnit(token, project.id, "יחידה 1");
-  const phase = await apiCreatePhase(token, unit.id, "שלד", 1);
+  const phase = await apiCreatePhase(token, unit.id, "SKELETON", 1);
   const subPhase = await apiCreateSubPhase(token, phase.id, "יציקת יסודות");
 
   await loginAsAdminViaUi(page);

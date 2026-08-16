@@ -39,6 +39,7 @@ export const phaseStatusLabels: Record<PhaseStatus, string> = {
 export const trades = Object.keys(tradeLabels) as Trade[];
 export const projectStages = Object.keys(projectStageLabels) as ProjectStage[];
 export const roles = Object.keys(roleLabels) as Role[];
+export const phaseStatuses = Object.keys(phaseStatusLabels) as PhaseStatus[];
 
 /**
  * Enum values arrive from the API as English strings that are wider than our

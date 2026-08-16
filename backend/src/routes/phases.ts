@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { PhaseStatus, Role } from "../constants";
+import { PhaseStatus, ProjectStage, Role } from "../constants";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { AuthedRequest, requireAuth } from "../middleware/auth";
 import { prisma } from "../prisma";
@@ -8,6 +8,8 @@ import { assertProjectOwnership, getProjectForPhase, getProjectForUnit, requireR
 export const phasesRouter = Router();
 
 phasesRouter.use(requireAuth, requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR));
+
+const validStages = Object.values(ProjectStage) as string[];
 
 phasesRouter.post(
   "/",
@@ -20,6 +22,10 @@ phasesRouter.post(
     };
     if (!unitId || !name || order === undefined) {
       res.status(400).json({ error: "unitId, name, order are required" });
+      return;
+    }
+    if (!validStages.includes(name)) {
+      res.status(400).json({ error: `name must be one of ${validStages.join(", ")}` });
       return;
     }
     const project = await getProjectForUnit(unitId);
@@ -52,6 +58,10 @@ phasesRouter.patch(
       return;
     }
     const { name, order, status } = req.body as { name?: string; order?: number; status?: string };
+    if (name !== undefined && !validStages.includes(name)) {
+      res.status(400).json({ error: `name must be one of ${validStages.join(", ")}` });
+      return;
+    }
     const phase = await prisma.phase.update({ where: { id }, data: { name, order, status } });
     res.json(phase);
   })

@@ -14,7 +14,7 @@ test("the feed paginates with a load-more control once there are more than a pag
   const projectName = `פרויקט דפדוף ${Date.now()}`;
   const project = await apiCreateProject(token, { name: projectName, location: "חיפה" });
   const unit = await apiCreateUnit(token, project.id, "יחידה 1");
-  const phase = await apiCreatePhase(token, unit.id, "שלד", 1);
+  const phase = await apiCreatePhase(token, unit.id, "SKELETON", 1);
   const subPhase = await apiCreateSubPhase(token, phase.id, "יציקת יסודות");
 
   const runId = Date.now();

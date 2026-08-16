@@ -15,7 +15,7 @@ test("project-level updates tab is independent from a sub-phase's feed", async (
   const projectName = `פרויקט עדכונים ${Date.now()}`;
   const project = await apiCreateProject(token, { name: projectName, location: "גבעתיים" });
   const unit = await apiCreateUnit(token, project.id, "יחידה 1");
-  const phase = await apiCreatePhase(token, unit.id, "שלד", 1);
+  const phase = await apiCreatePhase(token, unit.id, "SKELETON", 1);
   const subPhase = await apiCreateSubPhase(token, phase.id, "יציקת יסודות");
 
   await loginAsAdminViaUi(page);

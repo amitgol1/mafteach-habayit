@@ -3,8 +3,13 @@ import { PhaseStatus, Role } from "../constants";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { AuthedRequest, requireAuth } from "../middleware/auth";
 import { prisma } from "../prisma";
-import { isAssignedToSubPhase } from "../utils/subPhaseAccess";
-import { assertProjectOwnership, getProjectForPhase, getProjectForSubPhase, requireRole } from "../utils/tenantScope";
+import {
+  assertProjectOwnership,
+  canAccessProject,
+  getProjectForPhase,
+  getProjectForSubPhase,
+  requireRole,
+} from "../utils/tenantScope";
 
 export const subPhasesRouter = Router();
 
@@ -19,17 +24,15 @@ subPhasesRouter.get(
       res.status(404).json({ error: "Sub-phase not found" });
       return;
     }
+    const project = await getProjectForSubPhase(id);
     if (req.user!.role === Role.COLLABORATOR) {
-      if (!(await isAssignedToSubPhase(req.user!.id, id))) {
+      if (!project || !(await canAccessProject(project, req.user!))) {
         res.status(403).json({ error: "Not assigned to this sub-phase" });
         return;
       }
-    } else {
-      const project = await getProjectForSubPhase(id);
-      if (!assertProjectOwnership(project, req.user!)) {
-        res.status(403).json({ error: "Not assigned to this sub-phase" });
-        return;
-      }
+    } else if (!assertProjectOwnership(project, req.user!)) {
+      res.status(403).json({ error: "Not assigned to this sub-phase" });
+      return;
     }
     res.json(subPhase);
   })

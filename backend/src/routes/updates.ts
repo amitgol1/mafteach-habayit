@@ -44,6 +44,9 @@ async function fetchUpdatesPage(where: Record<string, unknown>, before: unknown,
   return { updates, nextCursor, hasMore };
 }
 
+// Write gate (posting an update): a COLLABORATOR must be assigned to this
+// specific sub-phase — seeing the project tree doesn't grant posting rights
+// to sub-phases outside what they're actually responsible for.
 function requireSubPhaseAccess() {
   return asyncHandler(async (req: AuthedRequest, res: Response, next: NextFunction) => {
     const subPhaseId = Number(req.params.subPhaseId);
@@ -62,6 +65,25 @@ function requireSubPhaseAccess() {
     }
     if (!(await isAssignedToSubPhase(req.user!.id, subPhaseId))) {
       res.status(403).json({ error: "Not assigned to this sub-phase" });
+      return;
+    }
+    next();
+  });
+}
+
+// View gate (reading a feed): any user with project-level access (via
+// ProjectParticipant or any assignment within the project) can view every
+// sub-phase's feed, not just the ones they're personally assigned to.
+function requireSubPhaseViewAccess() {
+  return asyncHandler(async (req: AuthedRequest, res: Response, next: NextFunction) => {
+    const subPhaseId = Number(req.params.subPhaseId);
+    const project = await getProjectForSubPhase(subPhaseId);
+    if (!project) {
+      res.status(404).json({ error: "Sub-phase not found" });
+      return;
+    }
+    if (!(await canAccessProject(project, req.user!))) {
+      res.status(403).json({ error: "Not assigned to this project" });
       return;
     }
     next();
@@ -89,7 +111,7 @@ function requireProjectAccess() {
 
 updatesRouter.get(
   "/sub-phases/:subPhaseId/updates",
-  requireSubPhaseAccess(),
+  requireSubPhaseViewAccess(),
   asyncHandler(async (req, res) => {
     const subPhaseId = Number(req.params.subPhaseId);
     const { before, limit } = req.query;

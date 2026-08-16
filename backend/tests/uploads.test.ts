@@ -85,7 +85,7 @@ describe("file uploads", () => {
         data: { name: "P", location: "L", entrepreneurId: entrepreneur.id },
       });
       const unit = await prisma.unit.create({ data: { projectId: project.id, identifier: "House A" } });
-      const phase = await prisma.phase.create({ data: { unitId: unit.id, name: "Skeleton", order: 1 } });
+      const phase = await prisma.phase.create({ data: { unitId: unit.id, name: "SKELETON", order: 1 } });
       return prisma.subPhase.create({ data: { phaseId: phase.id, name: "Underground" } });
     }
 

@@ -18,7 +18,7 @@ describe("/api/projects", () => {
   async function buildProjectHierarchy(name = "Villa Project", entrepreneurId = entrepreneur.id) {
     const project = await prisma.project.create({ data: { name, location: "Somewhere", entrepreneurId } });
     const unit = await prisma.unit.create({ data: { projectId: project.id, identifier: "House A" } });
-    const phase = await prisma.phase.create({ data: { unitId: unit.id, name: "Skeleton", order: 1 } });
+    const phase = await prisma.phase.create({ data: { unitId: unit.id, name: "SKELETON", order: 1 } });
     const subPhaseA = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Underground" } });
     const subPhaseB = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Ground Floor" } });
     return { project, unit, phase, subPhaseA, subPhaseB };
@@ -35,8 +35,8 @@ describe("/api/projects", () => {
       expect(res.body).toHaveLength(2);
     });
 
-    it("a COLLABORATOR assigned to a sub-phase sees the project, scoped to their assigned sub-phases", async () => {
-      const { project, subPhaseA } = await buildProjectHierarchy();
+    it("a COLLABORATOR assigned to a sub-phase sees the whole project tree, not just their own assignment", async () => {
+      const { project, subPhaseA, subPhaseB } = await buildProjectHierarchy();
       const collaborator = await createUser({ role: Role.COLLABORATOR, trade: Trade.ELECTRICIAN });
       await prisma.phaseAssignment.create({ data: { userId: collaborator.id, subPhaseId: subPhaseA.id } });
 
@@ -44,15 +44,13 @@ describe("/api/projects", () => {
       expect(listRes.status).toBe(200);
       expect(listRes.body).toHaveLength(1);
       expect(listRes.body[0].id).toBe(project.id);
-      const subPhaseIds = listRes.body[0].units[0].phases[0].subPhases.map((sp: { id: number }) => sp.id);
-      expect(subPhaseIds).toEqual([subPhaseA.id]);
 
       const detailRes = await request(app)
         .get(`/api/projects/${project.id}`)
         .set("Authorization", authHeader(collaborator));
       expect(detailRes.status).toBe(200);
       const detailSubPhaseIds = detailRes.body.units[0].phases[0].subPhases.map((sp: { id: number }) => sp.id);
-      expect(detailSubPhaseIds).toEqual([subPhaseA.id]);
+      expect(detailSubPhaseIds.sort()).toEqual([subPhaseA.id, subPhaseB.id].sort());
     });
 
     it("a COLLABORATOR with only a ProjectParticipant row (no sub-phase assignment) also sees the project", async () => {
