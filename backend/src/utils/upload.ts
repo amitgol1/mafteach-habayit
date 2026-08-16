@@ -22,6 +22,19 @@ const allowedMimeTypes = new Set([
   "video/mp4",
   "video/quicktime",
   "video/webm",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+
+const documentMimeTypes = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]);
 
 export class UnsupportedFileTypeError extends Error {
@@ -30,20 +43,30 @@ export class UnsupportedFileTypeError extends Error {
   }
 }
 
+const mimeTypeFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
+  if (!allowedMimeTypes.has(file.mimetype)) {
+    cb(new UnsupportedFileTypeError());
+    return;
+  }
+  cb(null, true);
+};
+
 export const upload = multer({
   storage,
   limits: { fileSize: 100 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (!allowedMimeTypes.has(file.mimetype)) {
-      cb(new UnsupportedFileTypeError());
-      return;
-    }
-    cb(null, true);
-  },
+  fileFilter: mimeTypeFilter,
 });
 
-export function mediaTypeFromMime(mimetype: string): "IMAGE" | "VIDEO" {
-  return mimetype.startsWith("video/") ? "VIDEO" : "IMAGE";
+export const uploadUpdateMedia = multer({
+  storage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: mimeTypeFilter,
+});
+
+export function mediaTypeFromMime(mimetype: string): "IMAGE" | "VIDEO" | "DOCUMENT" {
+  if (mimetype.startsWith("video/")) return "VIDEO";
+  if (documentMimeTypes.has(mimetype)) return "DOCUMENT";
+  return "IMAGE";
 }
 
 export function publicUploadPath(filename: string): string {

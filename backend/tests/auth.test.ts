@@ -10,7 +10,7 @@ describe("POST /api/auth/login", () => {
   });
 
   it("succeeds with valid credentials", async () => {
-    const user = await createUser({ role: Role.ADMIN, email: "admin@test.local", password: "secret123" });
+    const user = await createUser({ role: Role.SUPER_ADMIN, email: "admin@test.local", password: "secret123" });
 
     const res = await request(app).post("/api/auth/login").send({ email: user.email, password: "secret123" });
 
@@ -20,12 +20,12 @@ describe("POST /api/auth/login", () => {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: Role.ADMIN,
+      role: Role.SUPER_ADMIN,
     });
   });
 
   it("fails with wrong password", async () => {
-    const user = await createUser({ role: Role.ADMIN, email: "admin2@test.local", password: "secret123" });
+    const user = await createUser({ role: Role.SUPER_ADMIN, email: "admin2@test.local", password: "secret123" });
 
     const res = await request(app).post("/api/auth/login").send({ email: user.email, password: "wrong-password" });
 

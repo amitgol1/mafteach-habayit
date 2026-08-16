@@ -15,6 +15,7 @@ export async function createUser(opts: {
   name?: string;
   email?: string;
   password?: string;
+  createdById?: number | null;
 }) {
   userCounter += 1;
   const password = opts.password ?? "password123";
@@ -26,6 +27,7 @@ export async function createUser(opts: {
       passwordHash,
       role: opts.role,
       trade: opts.trade ?? null,
+      createdById: opts.createdById ?? null,
     },
   });
   return { ...user, password };

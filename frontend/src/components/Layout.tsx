@@ -47,7 +47,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 </span>
               </span>
 
-              {user.role === "ADMIN" && (
+              {(user.role === "SUPER_ADMIN" || user.role === "ENTREPRENEUR") && (
                 <Link
                   to="/admin"
                   className={`relative pb-1 text-sm font-medium transition-colors ${

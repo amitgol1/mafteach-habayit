@@ -5,22 +5,24 @@ import { Role, Trade } from "../src/constants";
 import { prisma } from "../src/prisma";
 import { authHeader, createUser, resetDb } from "./helpers";
 
-async function buildProjectHierarchy(name = "Villa Project") {
-  const project = await prisma.project.create({ data: { name, location: "Somewhere" } });
-  const unit = await prisma.unit.create({ data: { projectId: project.id, identifier: "House A" } });
-  const phase = await prisma.phase.create({ data: { unitId: unit.id, name: "Skeleton", order: 1 } });
-  const subPhaseA = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Underground" } });
-  const subPhaseB = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Ground Floor" } });
-  return { project, unit, phase, subPhaseA, subPhaseB };
-}
-
 describe("/api/projects", () => {
   let admin: Awaited<ReturnType<typeof createUser>>;
+  let entrepreneur: Awaited<ReturnType<typeof createUser>>;
 
   beforeEach(async () => {
     await resetDb();
-    admin = await createUser({ role: Role.ADMIN });
+    admin = await createUser({ role: Role.SUPER_ADMIN });
+    entrepreneur = await createUser({ role: Role.ENTREPRENEUR, email: "entrepreneur@test.local" });
   });
+
+  async function buildProjectHierarchy(name = "Villa Project", entrepreneurId = entrepreneur.id) {
+    const project = await prisma.project.create({ data: { name, location: "Somewhere", entrepreneurId } });
+    const unit = await prisma.unit.create({ data: { projectId: project.id, identifier: "House A" } });
+    const phase = await prisma.phase.create({ data: { unitId: unit.id, name: "Skeleton", order: 1 } });
+    const subPhaseA = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Underground" } });
+    const subPhaseB = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Ground Floor" } });
+    return { project, unit, phase, subPhaseA, subPhaseB };
+  }
 
   describe("GET / and GET /:id — role-based access", () => {
     it("admin sees all projects", async () => {
@@ -87,6 +89,110 @@ describe("/api/projects", () => {
     });
   });
 
+  describe("tenant isolation between ENTREPRENEURs", () => {
+    it("an ENTREPRENEUR only sees their own projects in the list", async () => {
+      await buildProjectHierarchy("Mine", entrepreneur.id);
+      const otherEntrepreneur = await createUser({ role: Role.ENTREPRENEUR, email: "other@test.local" });
+      await buildProjectHierarchy("Not Mine", otherEntrepreneur.id);
+
+      const res = await request(app).get("/api/projects").set("Authorization", authHeader(entrepreneur));
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].name).toBe("Mine");
+    });
+
+    it("an ENTREPRENEUR gets 403 on GET /:id for another entrepreneur's project", async () => {
+      const otherEntrepreneur = await createUser({ role: Role.ENTREPRENEUR, email: "other2@test.local" });
+      const { project } = await buildProjectHierarchy("Not Mine", otherEntrepreneur.id);
+
+      const res = await request(app)
+        .get(`/api/projects/${project.id}`)
+        .set("Authorization", authHeader(entrepreneur));
+      expect(res.status).toBe(403);
+    });
+
+    it("an ENTREPRENEUR gets 403 on PATCH/DELETE for another entrepreneur's project", async () => {
+      const otherEntrepreneur = await createUser({ role: Role.ENTREPRENEUR, email: "other3@test.local" });
+      const { project } = await buildProjectHierarchy("Not Mine", otherEntrepreneur.id);
+
+      const patchRes = await request(app)
+        .patch(`/api/projects/${project.id}`)
+        .set("Authorization", authHeader(entrepreneur))
+        .send({ name: "Hijacked" });
+      expect(patchRes.status).toBe(403);
+
+      const deleteRes = await request(app)
+        .delete(`/api/projects/${project.id}`)
+        .set("Authorization", authHeader(entrepreneur));
+      expect(deleteRes.status).toBe(403);
+    });
+  });
+
+  describe("POST / — entrepreneurId handling", () => {
+    it("SUPER_ADMIN must supply a valid entrepreneurId", async () => {
+      const missingRes = await request(app)
+        .post("/api/projects")
+        .set("Authorization", authHeader(admin))
+        .send({ name: "P", location: "L" });
+      expect(missingRes.status).toBe(400);
+
+      const collaborator = await createUser({ role: Role.COLLABORATOR, trade: Trade.ELECTRICIAN });
+      const invalidRoleRes = await request(app)
+        .post("/api/projects")
+        .set("Authorization", authHeader(admin))
+        .send({ name: "P", location: "L", entrepreneurId: collaborator.id });
+      expect(invalidRoleRes.status).toBe(400);
+
+      const okRes = await request(app)
+        .post("/api/projects")
+        .set("Authorization", authHeader(admin))
+        .send({ name: "P", location: "L", entrepreneurId: entrepreneur.id });
+      expect(okRes.status).toBe(201);
+      expect(okRes.body.entrepreneurId).toBe(entrepreneur.id);
+    });
+
+    it("an ENTREPRENEUR always owns projects they create, ignoring a client-supplied entrepreneurId", async () => {
+      const otherEntrepreneur = await createUser({ role: Role.ENTREPRENEUR, email: "other4@test.local" });
+
+      const res = await request(app)
+        .post("/api/projects")
+        .set("Authorization", authHeader(entrepreneur))
+        .send({ name: "P", location: "L", entrepreneurId: otherEntrepreneur.id });
+
+      expect(res.status).toBe(201);
+      expect(res.body.entrepreneurId).toBe(entrepreneur.id);
+    });
+  });
+
+  describe("POST / — project quota (ENTREPRENEUR only)", () => {
+    it("allows a 5th project and rejects a 6th with the quota message", async () => {
+      for (let i = 1; i <= 5; i++) {
+        const res = await request(app)
+          .post("/api/projects")
+          .set("Authorization", authHeader(entrepreneur))
+          .send({ name: `P${i}`, location: "L" });
+        expect(res.status).toBe(201);
+      }
+
+      const sixthRes = await request(app)
+        .post("/api/projects")
+        .set("Authorization", authHeader(entrepreneur))
+        .send({ name: "P6", location: "L" });
+      expect(sixthRes.status).toBe(403);
+      expect(sixthRes.body.error).toBe("הגעת למכסת הפרויקטים המקסימלית (5 פרויקטים)");
+    });
+
+    it("SUPER_ADMIN is not subject to the project quota", async () => {
+      for (let i = 1; i <= 6; i++) {
+        const res = await request(app)
+          .post("/api/projects")
+          .set("Authorization", authHeader(admin))
+          .send({ name: `Admin P${i}`, location: "L", entrepreneurId: entrepreneur.id });
+        expect(res.status).toBe(201);
+      }
+    });
+  });
+
   describe("POST / — participant validation", () => {
     it("rejects more than 7 participants", async () => {
       const user = await createUser({ role: Role.COLLABORATOR, trade: Trade.ELECTRICIAN });
@@ -95,7 +201,7 @@ describe("/api/projects", () => {
       const res = await request(app)
         .post("/api/projects")
         .set("Authorization", authHeader(admin))
-        .send({ name: "P", location: "L", participants });
+        .send({ name: "P", location: "L", entrepreneurId: entrepreneur.id, participants });
 
       expect(res.status).toBe(400);
     });
@@ -106,7 +212,12 @@ describe("/api/projects", () => {
       const res = await request(app)
         .post("/api/projects")
         .set("Authorization", authHeader(admin))
-        .send({ name: "P", location: "L", participants: [{ trade: "PAINTER", userId: user.id }] });
+        .send({
+          name: "P",
+          location: "L",
+          entrepreneurId: entrepreneur.id,
+          participants: [{ trade: "PAINTER", userId: user.id }],
+        });
 
       expect(res.status).toBe(400);
     });
@@ -121,6 +232,7 @@ describe("/api/projects", () => {
         .send({
           name: "P",
           location: "L",
+          entrepreneurId: entrepreneur.id,
           participants: [
             { trade: Trade.ELECTRICIAN, userId: userA.id },
             { trade: Trade.ELECTRICIAN, userId: userB.id },
@@ -134,7 +246,12 @@ describe("/api/projects", () => {
       const res = await request(app)
         .post("/api/projects")
         .set("Authorization", authHeader(admin))
-        .send({ name: "P", location: "L", participants: [{ trade: Trade.ELECTRICIAN, userId: 999999 }] });
+        .send({
+          name: "P",
+          location: "L",
+          entrepreneurId: entrepreneur.id,
+          participants: [{ trade: Trade.ELECTRICIAN, userId: 999999 }],
+        });
 
       expect(res.status).toBe(400);
     });
@@ -145,11 +262,47 @@ describe("/api/projects", () => {
       const res = await request(app)
         .post("/api/projects")
         .set("Authorization", authHeader(admin))
-        .send({ name: "P", location: "L", participants: [{ trade: Trade.ELECTRICIAN, userId: user.id }] });
+        .send({
+          name: "P",
+          location: "L",
+          entrepreneurId: entrepreneur.id,
+          participants: [{ trade: Trade.ELECTRICIAN, userId: user.id }],
+        });
 
       expect(res.status).toBe(201);
       expect(res.body.participants).toHaveLength(1);
       expect(res.body.participants[0].trade).toBe(Trade.ELECTRICIAN);
+    });
+
+    it("blocks an ENTREPRENEUR from adding a participant they did not create (cross-tenant leakage guard)", async () => {
+      const otherEntrepreneur = await createUser({ role: Role.ENTREPRENEUR, email: "other5@test.local" });
+      const foreignCollaborator = await createUser({
+        role: Role.COLLABORATOR,
+        trade: Trade.ELECTRICIAN,
+        createdById: otherEntrepreneur.id,
+      });
+
+      const res = await request(app)
+        .post("/api/projects")
+        .set("Authorization", authHeader(entrepreneur))
+        .send({ name: "P", location: "L", participants: [{ trade: Trade.ELECTRICIAN, userId: foreignCollaborator.id }] });
+
+      expect(res.status).toBe(403);
+    });
+
+    it("allows an ENTREPRENEUR to add a participant they created", async () => {
+      const ownCollaborator = await createUser({
+        role: Role.COLLABORATOR,
+        trade: Trade.ELECTRICIAN,
+        createdById: entrepreneur.id,
+      });
+
+      const res = await request(app)
+        .post("/api/projects")
+        .set("Authorization", authHeader(entrepreneur))
+        .send({ name: "P", location: "L", participants: [{ trade: Trade.ELECTRICIAN, userId: ownCollaborator.id }] });
+
+      expect(res.status).toBe(201);
     });
   });
 
@@ -162,6 +315,7 @@ describe("/api/projects", () => {
         .send({
           name: "Original",
           location: "Original Location",
+          entrepreneurId: entrepreneur.id,
           totalBudget: 1000,
           participants: [{ trade: Trade.ELECTRICIAN, userId: user.id }],
         });
@@ -186,7 +340,12 @@ describe("/api/projects", () => {
       const created = await request(app)
         .post("/api/projects")
         .set("Authorization", authHeader(admin))
-        .send({ name: "Original", location: "L", participants: [{ trade: Trade.ELECTRICIAN, userId: userA.id }] });
+        .send({
+          name: "Original",
+          location: "L",
+          entrepreneurId: entrepreneur.id,
+          participants: [{ trade: Trade.ELECTRICIAN, userId: userA.id }],
+        });
       const projectId = created.body.id;
 
       const patchRes = await request(app)

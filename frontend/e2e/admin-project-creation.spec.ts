@@ -1,13 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { adminToken, apiCreateUser, loginAsAdminViaUi } from "./helpers/api";
+import { apiCreateUser, createEntrepreneur, loginAsAdminViaUi } from "./helpers/api";
 
 test.describe("admin project creation", () => {
   let architectName: string;
+  let entrepreneurName: string;
 
   test.beforeAll(async () => {
-    const token = await adminToken();
+    const entrepreneur = await createEntrepreneur();
+    entrepreneurName = entrepreneur.name;
     architectName = `אדריכלית בדיקה ${Date.now()}`;
-    await apiCreateUser(token, {
+    await apiCreateUser(entrepreneur.token, {
       name: architectName,
       email: `architect-${Date.now()}@e2e.test`,
       password: "password123",
@@ -22,6 +24,7 @@ test.describe("admin project creation", () => {
     await expect(page.getByRole("heading", { name: "יצירת פרויקט חדש" })).toBeVisible();
 
     const projectName = `פרויקט חדש ${Date.now()}`;
+    await page.getByLabel("יזם", { exact: true }).selectOption({ label: entrepreneurName });
     await page.getByLabel("שם הפרויקט").fill(projectName);
     await page.getByLabel("מיקום").fill("הרצליה");
     await page.getByLabel("לקוחות / יזמים").fill("דנה ויוסי כהן");

@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { PhaseStatus, ProjectStage, Trade } from "../constants";
+import { PhaseStatus, ProjectStage, Role, Trade } from "../constants";
 import { asyncHandler } from "../middleware/asyncHandler";
-import { AuthedRequest, requireAdmin, requireAuth } from "../middleware/auth";
+import { AuthedRequest, requireAuth } from "../middleware/auth";
 import { prisma } from "../prisma";
 import { getAssignedSubPhaseIds } from "../utils/subPhaseAccess";
+import { assertProjectOwnership, canAccessProject, projectTenantFilter, requireRole } from "../utils/tenantScope";
 
 export const projectsRouter = Router();
 
@@ -17,8 +18,9 @@ const participantInclude = {
 } as const;
 
 async function validateParticipants(
-  participants: { trade?: string; userId?: number }[]
-): Promise<{ error: string } | { data: { trade: string; userId: number }[] }> {
+  participants: { trade?: string; userId?: number }[],
+  actor: { id: number; role: string }
+): Promise<{ error: string; status?: number } | { data: { trade: string; userId: number }[] }> {
   if (!Array.isArray(participants) || participants.length > 7) {
     return { error: "participants must be an array of at most 7 entries" };
   }
@@ -41,40 +43,52 @@ async function validateParticipants(
   if (missing.length > 0) {
     return { error: `userId(s) not found: ${missing.join(", ")}` };
   }
+
+  // Cross-tenant leakage guard: an ENTREPRENEUR may only add participants they created.
+  if (actor.role === Role.ENTREPRENEUR) {
+    const owned = await prisma.user.findMany({
+      where: { id: { in: userIds }, createdById: actor.id },
+      select: { id: true },
+    });
+    const ownedIds = new Set(owned.map((u) => u.id));
+    const notOwned = userIds.filter((id) => !ownedIds.has(id));
+    if (notOwned.length > 0) {
+      return { error: `userId(s) not created by this entrepreneur: ${notOwned.join(", ")}`, status: 403 };
+    }
+  }
+
   return { data: participants.map((p) => ({ trade: p.trade!, userId: p.userId! })) };
 }
 
 projectsRouter.get(
   "/",
   asyncHandler(async (req: AuthedRequest, res) => {
-    if (req.user!.role === "ADMIN") {
+    const where = await projectTenantFilter(req.user!);
+
+    if (req.user!.role === Role.COLLABORATOR) {
+      const subPhaseIds = await getAssignedSubPhaseIds(req.user!.id);
       const projects = await prisma.project.findMany({
+        where,
         orderBy: { createdAt: "desc" },
-        include: { units: { include: { phases: { orderBy: { order: "asc" } } } } },
+        include: {
+          units: {
+            include: {
+              phases: {
+                orderBy: { order: "asc" },
+                include: { subPhases: { where: { id: { in: subPhaseIds } } } },
+              },
+            },
+          },
+        },
       });
       res.json(projects);
       return;
     }
 
-    const subPhaseIds = await getAssignedSubPhaseIds(req.user!.id);
     const projects = await prisma.project.findMany({
-      where: {
-        OR: [
-          { units: { some: { phases: { some: { subPhases: { some: { id: { in: subPhaseIds } } } } } } } },
-          { participants: { some: { userId: req.user!.id } } },
-        ],
-      },
+      where,
       orderBy: { createdAt: "desc" },
-      include: {
-        units: {
-          include: {
-            phases: {
-              orderBy: { order: "asc" },
-              include: { subPhases: { where: { id: { in: subPhaseIds } } } },
-            },
-          },
-        },
-      },
+      include: { units: { include: { phases: { orderBy: { order: "asc" } } } } },
     });
     res.json(projects);
   })
@@ -96,16 +110,13 @@ projectsRouter.get(
       return;
     }
 
-    if (req.user!.role !== "ADMIN") {
+    if (!(await canAccessProject(project, req.user!))) {
+      res.status(403).json({ error: "Not assigned to this project" });
+      return;
+    }
+
+    if (req.user!.role === Role.COLLABORATOR) {
       const subPhaseIds = new Set(await getAssignedSubPhaseIds(req.user!.id));
-      const hasSubPhaseAccess = project.units.some((u) => u.phases.some((p) => p.subPhases.some((sp) => subPhaseIds.has(sp.id))));
-      const isParticipant =
-        (await prisma.projectParticipant.findFirst({ where: { projectId: id, userId: req.user!.id } })) !== null;
-      const hasAccess = hasSubPhaseAccess || isParticipant;
-      if (!hasAccess) {
-        res.status(403).json({ error: "Not assigned to this project" });
-        return;
-      }
       project.units = project.units
         .map((u) => ({
           ...u,
@@ -122,17 +133,19 @@ projectsRouter.get(
 
 projectsRouter.post(
   "/",
-  requireAdmin,
-  asyncHandler(async (req, res) => {
-    const { name, location, overallStatus, owners, totalBudget, currentStage, participants } = req.body as {
-      name?: string;
-      location?: string;
-      overallStatus?: string;
-      owners?: string;
-      totalBudget?: number;
-      currentStage?: string;
-      participants?: { trade?: string; userId?: number }[];
-    };
+  requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { name, location, overallStatus, owners, totalBudget, currentStage, participants, entrepreneurId } =
+      req.body as {
+        name?: string;
+        location?: string;
+        overallStatus?: string;
+        owners?: string;
+        totalBudget?: number;
+        currentStage?: string;
+        participants?: { trade?: string; userId?: number }[];
+        entrepreneurId?: number;
+      };
     if (!name || !location) {
       res.status(400).json({ error: "name and location are required" });
       return;
@@ -142,11 +155,32 @@ projectsRouter.post(
       return;
     }
 
+    let resolvedEntrepreneurId: number;
+    if (req.user!.role === Role.ENTREPRENEUR) {
+      resolvedEntrepreneurId = req.user!.id;
+      const count = await prisma.project.count({ where: { entrepreneurId: resolvedEntrepreneurId } });
+      if (count >= 5) {
+        res.status(403).json({ error: "הגעת למכסת הפרויקטים המקסימלית (5 פרויקטים)" });
+        return;
+      }
+    } else {
+      if (!entrepreneurId) {
+        res.status(400).json({ error: "entrepreneurId is required" });
+        return;
+      }
+      const entrepreneur = await prisma.user.findUnique({ where: { id: Number(entrepreneurId) } });
+      if (!entrepreneur || entrepreneur.role !== Role.ENTREPRENEUR) {
+        res.status(400).json({ error: "entrepreneurId must reference an existing ENTREPRENEUR user" });
+        return;
+      }
+      resolvedEntrepreneurId = entrepreneur.id;
+    }
+
     let participantsData: { trade: string; userId: number }[] = [];
     if (participants) {
-      const result = await validateParticipants(participants);
+      const result = await validateParticipants(participants, req.user!);
       if ("error" in result) {
-        res.status(400).json({ error: result.error });
+        res.status(result.status ?? 400).json({ error: result.error });
         return;
       }
       participantsData = result.data;
@@ -160,6 +194,7 @@ projectsRouter.post(
         owners: owners ?? null,
         totalBudget: totalBudget ?? null,
         currentStage: currentStage ?? null,
+        entrepreneurId: resolvedEntrepreneurId,
         participants: { create: participantsData },
       },
       include: participantInclude,
@@ -170,9 +205,19 @@ projectsRouter.post(
 
 projectsRouter.patch(
   "/:id",
-  requireAdmin,
-  asyncHandler(async (req, res) => {
+  requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR),
+  asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project) {
+      res.status(404).json({ error: "Project not found" });
+      return;
+    }
+    if (!assertProjectOwnership(project, req.user!)) {
+      res.status(403).json({ error: "Not authorized for this project" });
+      return;
+    }
+
     const { name, location, overallStatus, owners, totalBudget, currentStage, participants } = req.body as {
       name?: string;
       location?: string;
@@ -189,15 +234,15 @@ projectsRouter.patch(
 
     let participantsData: { trade: string; userId: number }[] | undefined;
     if (participants !== undefined) {
-      const result = await validateParticipants(participants);
+      const result = await validateParticipants(participants, req.user!);
       if ("error" in result) {
-        res.status(400).json({ error: result.error });
+        res.status(result.status ?? 400).json({ error: result.error });
         return;
       }
       participantsData = result.data;
     }
 
-    const project = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
       if (participantsData !== undefined) {
         await tx.projectParticipant.deleteMany({ where: { projectId: id } });
         if (participantsData.length > 0) {
@@ -212,15 +257,24 @@ projectsRouter.patch(
         include: participantInclude,
       });
     });
-    res.json(project);
+    res.json(updated);
   })
 );
 
 projectsRouter.delete(
   "/:id",
-  requireAdmin,
-  asyncHandler(async (req, res) => {
+  requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR),
+  asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project) {
+      res.status(404).json({ error: "Project not found" });
+      return;
+    }
+    if (!assertProjectOwnership(project, req.user!)) {
+      res.status(403).json({ error: "Not authorized for this project" });
+      return;
+    }
     await prisma.project.delete({ where: { id } });
     res.status(204).send();
   })

@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { adminToken, apiCreateProject, loginAsAdminViaUi } from "./helpers/api";
+import { apiCreateProject, createEntrepreneur, loginAsAdminViaUi } from "./helpers/api";
 
 test("dashboard lists projects; clicking a card navigates to /projects/:id", async ({ page }) => {
-  const token = await adminToken();
+  const { token } = await createEntrepreneur();
   const projectName = `פרויקט דשבורד ${Date.now()}`;
   const project = await apiCreateProject(token, { name: projectName, location: "רמת גן" });
 

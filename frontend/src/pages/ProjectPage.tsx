@@ -10,11 +10,13 @@ import { ProjectTree } from "../components/ProjectTree";
 import { StageTracker } from "../components/StageTracker";
 import { StatusBadge } from "../components/StatusBadge";
 import { SubPhaseFeed } from "../components/SubPhaseFeed";
+import { UpdatesFeed } from "../components/UpdatesFeed";
 
-type Tab = "overview" | "financials";
+type Tab = "overview" | "updates" | "financials";
 
 const tabLabels: Record<Tab, string> = {
   overview: "סקירה",
+  updates: "עדכונים",
   financials: "כספים",
 };
 
@@ -26,6 +28,8 @@ export function ProjectPage() {
   const [selectedSubPhaseId, setSelectedSubPhaseId] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [editing, setEditing] = useState(false);
+  const isManager = user?.role === "SUPER_ADMIN" || user?.role === "ENTREPRENEUR";
+  const visibleTabs: Tab[] = isManager ? ["overview", "updates", "financials"] : ["overview", "updates"];
 
   useEffect(() => {
     fetchProject();
@@ -65,7 +69,7 @@ export function ProjectPage() {
           </div>
           <p className="mt-1 text-sm text-ink-soft">{project.location}</p>
         </div>
-        {user?.role === "ADMIN" && (
+        {isManager && (
           <button type="button" onClick={() => setEditing((prev) => !prev)} className="btn btn-ghost">
             {editing ? "ביטול עריכה" : "ערוך פרויקט"}
           </button>
@@ -76,7 +80,7 @@ export function ProjectPage() {
         <StageTracker currentStage={project.currentStage} />
       </div>
 
-      {user?.role === "ADMIN" && editing && (
+      {isManager && editing && (
         <ProjectEditForm
           project={project}
           onSaved={() => {
@@ -86,23 +90,21 @@ export function ProjectPage() {
         />
       )}
 
-      {user?.role === "ADMIN" && (
-        <div className="mb-6 flex gap-1 border-b border-limestone-deep">
-          {(["overview", "financials"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={`relative px-4 pb-2.5 text-sm font-medium transition-colors ${
-                tab === t ? "text-ink" : "text-ink-faint hover:text-ink-soft"
-              }`}
-            >
-              {tabLabels[t]}
-              {tab === t && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brass" />}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="mb-6 flex gap-1 border-b border-limestone-deep">
+        {visibleTabs.map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={`relative px-4 pb-2.5 text-sm font-medium transition-colors ${
+              tab === t ? "text-ink" : "text-ink-faint hover:text-ink-soft"
+            }`}
+          >
+            {tabLabels[t]}
+            {tab === t && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brass" />}
+          </button>
+        ))}
+      </div>
 
       {tab === "overview" && (
         <div className="grid gap-6 md:grid-cols-2">
@@ -123,7 +125,13 @@ export function ProjectPage() {
         </div>
       )}
 
-      {tab === "financials" && user?.role === "ADMIN" && <FinancialsTab projectId={project.id} />}
+      {tab === "updates" && (
+        <div className="panel h-[32rem] p-4 md:h-[38rem]">
+          <UpdatesFeed feedPath={`/projects/${project.id}/updates`} />
+        </div>
+      )}
+
+      {tab === "financials" && isManager && <FinancialsTab projectId={project.id} />}
     </Layout>
   );
 }

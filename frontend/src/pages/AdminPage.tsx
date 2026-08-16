@@ -18,7 +18,7 @@ export function AdminPage() {
   const [tab, setTab] = useState<Tab>("project");
   const [userRefreshSignal, setUserRefreshSignal] = useState(0);
 
-  if (user?.role !== "ADMIN") {
+  if (user?.role !== "SUPER_ADMIN" && user?.role !== "ENTREPRENEUR") {
     return <Navigate to="/" replace />;
   }
 

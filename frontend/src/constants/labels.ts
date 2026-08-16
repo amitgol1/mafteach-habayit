@@ -24,7 +24,8 @@ export const projectStageLabels: Record<ProjectStage, string> = {
 };
 
 export const roleLabels: Record<Role, string> = {
-  ADMIN: "מנהל עבודה",
+  SUPER_ADMIN: "מנהל מערכת",
+  ENTREPRENEUR: "יזם",
   COLLABORATOR: "איש מקצוע",
 };
 

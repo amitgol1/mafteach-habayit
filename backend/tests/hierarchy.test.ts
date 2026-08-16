@@ -7,15 +7,19 @@ import { authHeader, createUser, resetDb } from "./helpers";
 
 describe("units/phases/sub-phases", () => {
   let admin: Awaited<ReturnType<typeof createUser>>;
+  let entrepreneur: Awaited<ReturnType<typeof createUser>>;
 
   beforeEach(async () => {
     await resetDb();
-    admin = await createUser({ role: Role.ADMIN });
+    admin = await createUser({ role: Role.SUPER_ADMIN });
+    entrepreneur = await createUser({ role: Role.ENTREPRENEUR, email: "entrepreneur@test.local" });
   });
 
   describe("/api/units", () => {
     it("admin can create, update, and delete a unit", async () => {
-      const project = await prisma.project.create({ data: { name: "P", location: "L" } });
+      const project = await prisma.project.create({
+        data: { name: "P", location: "L", entrepreneurId: entrepreneur.id },
+      });
 
       const createRes = await request(app)
         .post("/api/units")
@@ -37,7 +41,7 @@ describe("units/phases/sub-phases", () => {
 
     it("blocks a COLLABORATOR from creating a unit", async () => {
       const collaborator = await createUser({ role: Role.COLLABORATOR, trade: Trade.ELECTRICIAN });
-      const project = await prisma.project.create({ data: { name: "P", location: "L" } });
+      const project = await prisma.project.create({ data: { name: "P", location: "L", entrepreneurId: entrepreneur.id } });
 
       const res = await request(app)
         .post("/api/units")
@@ -45,11 +49,36 @@ describe("units/phases/sub-phases", () => {
         .send({ projectId: project.id, identifier: "House A" });
       expect(res.status).toBe(403);
     });
+
+    it("blocks an ENTREPRENEUR from creating a unit on a project they do not own", async () => {
+      const otherEntrepreneur = await createUser({ role: Role.ENTREPRENEUR, email: "other@test.local" });
+      const project = await prisma.project.create({
+        data: { name: "P", location: "L", entrepreneurId: entrepreneur.id },
+      });
+
+      const res = await request(app)
+        .post("/api/units")
+        .set("Authorization", authHeader(otherEntrepreneur))
+        .send({ projectId: project.id, identifier: "House A" });
+      expect(res.status).toBe(403);
+    });
+
+    it("allows the owning ENTREPRENEUR to create a unit", async () => {
+      const project = await prisma.project.create({
+        data: { name: "P", location: "L", entrepreneurId: entrepreneur.id },
+      });
+
+      const res = await request(app)
+        .post("/api/units")
+        .set("Authorization", authHeader(entrepreneur))
+        .send({ projectId: project.id, identifier: "House A" });
+      expect(res.status).toBe(201);
+    });
   });
 
   describe("/api/phases", () => {
     it("admin can create, update, and delete a phase", async () => {
-      const project = await prisma.project.create({ data: { name: "P", location: "L" } });
+      const project = await prisma.project.create({ data: { name: "P", location: "L", entrepreneurId: entrepreneur.id } });
       const unit = await prisma.unit.create({ data: { projectId: project.id, identifier: "House A" } });
 
       const createRes = await request(app)
@@ -72,7 +101,7 @@ describe("units/phases/sub-phases", () => {
 
     it("blocks a COLLABORATOR from creating a phase", async () => {
       const collaborator = await createUser({ role: Role.COLLABORATOR, trade: Trade.ELECTRICIAN });
-      const project = await prisma.project.create({ data: { name: "P", location: "L" } });
+      const project = await prisma.project.create({ data: { name: "P", location: "L", entrepreneurId: entrepreneur.id } });
       const unit = await prisma.unit.create({ data: { projectId: project.id, identifier: "House A" } });
 
       const res = await request(app)
@@ -85,7 +114,7 @@ describe("units/phases/sub-phases", () => {
 
   describe("/api/sub-phases", () => {
     async function buildHierarchy() {
-      const project = await prisma.project.create({ data: { name: "P", location: "L" } });
+      const project = await prisma.project.create({ data: { name: "P", location: "L", entrepreneurId: entrepreneur.id } });
       const unit = await prisma.unit.create({ data: { projectId: project.id, identifier: "House A" } });
       const phase = await prisma.phase.create({ data: { unitId: unit.id, name: "Skeleton", order: 1 } });
       return { project, unit, phase };
@@ -140,6 +169,40 @@ describe("units/phases/sub-phases", () => {
         .delete(`/api/sub-phases/${subPhase.id}/assignments/${collaborator.id}`)
         .set("Authorization", authHeader(admin));
       expect(deleteRes.status).toBe(204);
+    });
+
+    it("blocks an ENTREPRENEUR from assigning a COLLABORATOR they did not create", async () => {
+      const { phase, project } = await buildHierarchy();
+      await prisma.project.update({ where: { id: project.id }, data: { entrepreneurId: entrepreneur.id } });
+      const otherEntrepreneur = await createUser({ role: Role.ENTREPRENEUR, email: "other-e@test.local" });
+      const foreignCollaborator = await createUser({
+        role: Role.COLLABORATOR,
+        trade: Trade.ELECTRICIAN,
+        createdById: otherEntrepreneur.id,
+      });
+      const subPhase = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Underground" } });
+
+      const res = await request(app)
+        .post(`/api/sub-phases/${subPhase.id}/assignments`)
+        .set("Authorization", authHeader(entrepreneur))
+        .send({ userId: foreignCollaborator.id });
+      expect(res.status).toBe(403);
+    });
+
+    it("allows an ENTREPRENEUR to assign a COLLABORATOR they created", async () => {
+      const { phase } = await buildHierarchy();
+      const ownCollaborator = await createUser({
+        role: Role.COLLABORATOR,
+        trade: Trade.ELECTRICIAN,
+        createdById: entrepreneur.id,
+      });
+      const subPhase = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Underground" } });
+
+      const res = await request(app)
+        .post(`/api/sub-phases/${subPhase.id}/assignments`)
+        .set("Authorization", authHeader(entrepreneur))
+        .send({ userId: ownCollaborator.id });
+      expect(res.status).toBe(201);
     });
 
     it("GET /:id returns 403 for a COLLABORATOR not assigned to the sub-phase", async () => {

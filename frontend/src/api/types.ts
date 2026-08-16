@@ -1,6 +1,6 @@
-export type Role = "ADMIN" | "COLLABORATOR";
+export type Role = "SUPER_ADMIN" | "ENTREPRENEUR" | "COLLABORATOR";
 export type PhaseStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED";
-export type MediaType = "IMAGE" | "VIDEO";
+export type MediaType = "IMAGE" | "VIDEO" | "DOCUMENT";
 export type Trade =
   | "ARCHITECT"
   | "CONSTRUCTION_ENGINEER"
@@ -75,13 +75,21 @@ export interface Project {
 
 export interface Update {
   id: number;
-  subPhaseId: number;
+  subPhaseId: number | null;
+  projectId: number | null;
   userId: number;
-  messageText: string | null;
+  subject: string | null;
+  description: string | null;
   mediaUrl: string | null;
   mediaType: MediaType | null;
   timestamp: string;
   user: { id: number; name: string; role: Role; trade: string | null };
+}
+
+export interface UpdatesPage {
+  updates: Update[];
+  nextCursor: number | null;
+  hasMore: boolean;
 }
 
 export interface FinancialRecord {

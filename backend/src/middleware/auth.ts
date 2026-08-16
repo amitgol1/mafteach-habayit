@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import { Role } from "../constants";
 
 export interface AuthedRequest extends Request {
   user?: { id: number; role: string };
@@ -22,7 +23,7 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
 }
 
 export function requireAdmin(req: AuthedRequest, res: Response, next: NextFunction) {
-  if (req.user?.role !== "ADMIN") {
+  if (req.user?.role !== Role.SUPER_ADMIN) {
     res.status(403).json({ error: "Admin access required" });
     return;
   }

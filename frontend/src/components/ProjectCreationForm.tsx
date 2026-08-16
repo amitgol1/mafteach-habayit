@@ -1,8 +1,11 @@
 import { api } from "../api/client";
 import type { Project } from "../api/types";
+import { useAuth } from "../auth/AuthContext";
 import { ProjectFormFields, type ProjectFormPayload } from "./ProjectFormFields";
 
 export function ProjectCreationForm() {
+  const { user } = useAuth();
+
   async function handleCreate(payload: ProjectFormPayload) {
     await api.post<Project>("/projects", payload);
   }
@@ -17,6 +20,7 @@ export function ProjectCreationForm() {
         successMessage="הפרויקט נוצר בהצלחה"
         errorMessage="אירעה שגיאה ביצירת הפרויקט"
         resetOnSuccess
+        entrepreneurPicker={user?.role === "SUPER_ADMIN"}
         onSubmit={handleCreate}
       />
     </div>

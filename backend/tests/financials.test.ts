@@ -7,16 +7,20 @@ import { authHeader, createUser, resetDb } from "./helpers";
 
 describe("/api/projects/:projectId/financials", () => {
   let admin: Awaited<ReturnType<typeof createUser>>;
+  let entrepreneur: Awaited<ReturnType<typeof createUser>>;
 
   beforeEach(async () => {
     await resetDb();
-    admin = await createUser({ role: Role.ADMIN });
+    admin = await createUser({ role: Role.SUPER_ADMIN });
+    entrepreneur = await createUser({ role: Role.ENTREPRENEUR, email: "entrepreneur@test.local" });
   });
 
   // Regression guard: totalDue must come from project.totalBudget, not be
   // summed from per-record fields — FinancialRecord no longer has a totalDue column.
   it("totals.totalDue equals project.totalBudget, and recomputes after a payment", async () => {
-    const project = await prisma.project.create({ data: { name: "P", location: "L", totalBudget: 50000 } });
+    const project = await prisma.project.create({
+      data: { name: "P", location: "L", totalBudget: 50000, entrepreneurId: entrepreneur.id },
+    });
 
     const initialRes = await request(app)
       .get(`/api/projects/${project.id}/financials`)
@@ -39,7 +43,9 @@ describe("/api/projects/:projectId/financials", () => {
   });
 
   it("does not require or persist a totalDue field on a financial record", async () => {
-    const project = await prisma.project.create({ data: { name: "P", location: "L", totalBudget: 1000 } });
+    const project = await prisma.project.create({
+      data: { name: "P", location: "L", totalBudget: 1000, entrepreneurId: entrepreneur.id },
+    });
 
     const res = await request(app)
       .post(`/api/projects/${project.id}/financials`)
@@ -51,7 +57,9 @@ describe("/api/projects/:projectId/financials", () => {
   });
 
   it("DELETE /api/financial-records/:id removes a record and recomputes totals", async () => {
-    const project = await prisma.project.create({ data: { name: "P", location: "L", totalBudget: 1000 } });
+    const project = await prisma.project.create({
+      data: { name: "P", location: "L", totalBudget: 1000, entrepreneurId: entrepreneur.id },
+    });
     const created = await request(app)
       .post(`/api/projects/${project.id}/financials`)
       .set("Authorization", authHeader(admin))

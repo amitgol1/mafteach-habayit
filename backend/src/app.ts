@@ -1,6 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
+import multer from "multer";
 import { authRouter } from "./routes/auth";
 import { financialRouter } from "./routes/financial";
 import { phasesRouter } from "./routes/phases";
@@ -30,6 +31,15 @@ app.use("/api", financialRouter);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof UnsupportedFileTypeError) {
+    res.status(400).json({ error: err.message });
+    return;
+  }
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      const maxMb = err.field === "receipt" ? 100 : 15;
+      res.status(400).json({ error: `הקובץ גדול מדי (מקסימום ${maxMb}MB)` });
+      return;
+    }
     res.status(400).json({ error: err.message });
     return;
   }

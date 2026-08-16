@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import type { Role, Trade, User } from "../api/types";
-import { roleLabel, roleLabels, roles, tradeLabel, tradeLabels, trades } from "../constants/labels";
+import type { Trade, User } from "../api/types";
+import { roleLabel, tradeLabel, tradeLabels, trades } from "../constants/labels";
 
 interface UserListProps {
   refreshSignal: number;
@@ -103,10 +103,10 @@ interface UserEditRowProps {
 
 function UserEditRow({ user, onCancel, onSaved }: UserEditRowProps) {
   const [name, setName] = useState(user.name);
-  const [role, setRole] = useState<Role>(user.role);
   const [trade, setTrade] = useState<Trade | "">((user.trade as Trade) ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isCollaborator = user.role === "COLLABORATOR";
 
   async function handleSave() {
     if (!name.trim()) return;
@@ -115,8 +115,7 @@ function UserEditRow({ user, onCancel, onSaved }: UserEditRowProps) {
     try {
       await api.patch<User>(`/users/${user.id}`, {
         name: name.trim(),
-        role,
-        trade: trade || null,
+        ...(isCollaborator ? { trade: trade || null } : {}),
       });
       onSaved();
     } catch (err) {
@@ -133,7 +132,7 @@ function UserEditRow({ user, onCancel, onSaved }: UserEditRowProps) {
       <p className="numeric text-xs text-ink-faint" dir="ltr">
         {user.email}
       </p>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="form-label" htmlFor={`edit-name-${user.id}`}>
             שם מלא (עריכה)
@@ -147,41 +146,26 @@ function UserEditRow({ user, onCancel, onSaved }: UserEditRowProps) {
             className="form-field"
           />
         </div>
-        <div>
-          <label className="form-label" htmlFor={`edit-role-${user.id}`}>
-            הרשאת מערכת (עריכה)
-          </label>
-          <select
-            id={`edit-role-${user.id}`}
-            value={role}
-            onChange={(e) => setRole(e.target.value as Role)}
-            className="form-field"
-          >
-            {roles.map((r) => (
-              <option key={r} value={r}>
-                {roleLabels[r]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="form-label" htmlFor={`edit-trade-${user.id}`}>
-            תחום עיסוק (עריכה)
-          </label>
-          <select
-            id={`edit-trade-${user.id}`}
-            value={trade}
-            onChange={(e) => setTrade(e.target.value as Trade | "")}
-            className="form-field"
-          >
-            <option value="">ללא</option>
-            {trades.map((t) => (
-              <option key={t} value={t}>
-                {tradeLabels[t]}
-              </option>
-            ))}
-          </select>
-        </div>
+        {isCollaborator && (
+          <div>
+            <label className="form-label" htmlFor={`edit-trade-${user.id}`}>
+              תחום עיסוק (עריכה)
+            </label>
+            <select
+              id={`edit-trade-${user.id}`}
+              value={trade}
+              onChange={(e) => setTrade(e.target.value as Trade | "")}
+              className="form-field"
+            >
+              <option value="">ללא</option>
+              {trades.map((t) => (
+                <option key={t} value={t}>
+                  {tradeLabels[t]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {error && (

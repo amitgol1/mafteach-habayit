@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { adminToken, apiCreateProject, loginAsAdminViaUi } from "./helpers/api";
+import { apiCreateProject, createEntrepreneur, loginAsAdminViaUi } from "./helpers/api";
 
 test("editing a project's stage and budget persists after reload", async ({ page }) => {
-  const token = await adminToken();
+  const { token } = await createEntrepreneur();
   const projectName = `פרויקט לעריכה ${Date.now()}`;
   const project = await apiCreateProject(token, {
     name: projectName,

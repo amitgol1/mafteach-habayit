@@ -1,17 +1,21 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api/client";
 import type { Role, Trade, User } from "../api/types";
-import { roleLabels, roles, tradeLabels, trades } from "../constants/labels";
+import { useAuth } from "../auth/AuthContext";
+import { roleLabel, tradeLabels, trades } from "../constants/labels";
 
 interface UserManagementFormProps {
   onCreated?: () => void;
 }
 
 export function UserManagementForm({ onCreated }: UserManagementFormProps = {}) {
+  const { user: actor } = useAuth();
+  const allowedRole: Role = actor?.role === "SUPER_ADMIN" ? "ENTREPRENEUR" : "COLLABORATOR";
+  const showTrade = allowedRole === "COLLABORATOR";
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("COLLABORATOR");
   const [trade, setTrade] = useState<Trade | "">("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,14 +33,13 @@ export function UserManagementForm({ onCreated }: UserManagementFormProps = {}) 
         name: name.trim(),
         email: email.trim(),
         password,
-        role,
-        trade: trade || undefined,
+        role: allowedRole,
+        trade: showTrade ? trade || undefined : undefined,
       });
       setSuccess("המשתמש נוצר בהצלחה");
       setName("");
       setEmail("");
       setPassword("");
-      setRole("COLLABORATOR");
       setTrade("");
       onCreated?.();
     } catch (err) {
@@ -100,37 +103,28 @@ export function UserManagementForm({ onCreated }: UserManagementFormProps = {}) 
             <label className="form-label" htmlFor="role">
               הרשאת מערכת
             </label>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value as Role)}
-              className="form-field"
-            >
-              {roles.map((r) => (
-                <option key={r} value={r}>
-                  {roleLabels[r]}
-                </option>
-              ))}
-            </select>
+            <input id="role" type="text" disabled value={roleLabel(allowedRole) ?? ""} className="form-field" />
           </div>
-          <div>
-            <label className="form-label" htmlFor="trade">
-              תחום עיסוק
-            </label>
-            <select
-              id="trade"
-              value={trade}
-              onChange={(e) => setTrade(e.target.value as Trade | "")}
-              className="form-field"
-            >
-              <option value="">ללא</option>
-              {trades.map((t) => (
-                <option key={t} value={t}>
-                  {tradeLabels[t]}
-                </option>
-              ))}
-            </select>
-          </div>
+          {showTrade && (
+            <div>
+              <label className="form-label" htmlFor="trade">
+                תחום עיסוק
+              </label>
+              <select
+                id="trade"
+                value={trade}
+                onChange={(e) => setTrade(e.target.value as Trade | "")}
+                className="form-field"
+              >
+                <option value="">ללא</option>
+                {trades.map((t) => (
+                  <option key={t} value={t}>
+                    {tradeLabels[t]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {error && (

@@ -1,5 +1,6 @@
 export const Role = {
-  ADMIN: "ADMIN",
+  SUPER_ADMIN: "SUPER_ADMIN",
+  ENTREPRENEUR: "ENTREPRENEUR",
   COLLABORATOR: "COLLABORATOR",
 } as const;
 export type Role = (typeof Role)[keyof typeof Role];
@@ -15,6 +16,7 @@ export type PhaseStatus = (typeof PhaseStatus)[keyof typeof PhaseStatus];
 export const MediaType = {
   IMAGE: "IMAGE",
   VIDEO: "VIDEO",
+  DOCUMENT: "DOCUMENT",
 } as const;
 export type MediaType = (typeof MediaType)[keyof typeof MediaType];
 

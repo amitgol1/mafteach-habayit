@@ -4,8 +4,8 @@ import { app } from "../src/app";
 import { Role } from "../src/constants";
 import { authHeader, createUser, resetDb } from "./helpers";
 
-// GET /api/users is an admin-only route (requireAuth + requireAdmin), used
-// here purely as a vehicle to exercise the shared auth middleware.
+// GET /api/users is a SUPER_ADMIN/ENTREPRENEUR-only route (requireAuth +
+// requireRole), used here purely as a vehicle to exercise the shared auth middleware.
 describe("auth middleware", () => {
   beforeEach(async () => {
     await resetDb();
@@ -21,7 +21,7 @@ describe("auth middleware", () => {
     expect(res.status).toBe(401);
   });
 
-  it("requireAdmin returns 403 when a COLLABORATOR hits an admin-only route", async () => {
+  it("requireRole returns 403 when a COLLABORATOR hits a SUPER_ADMIN/ENTREPRENEUR-only route", async () => {
     const collaborator = await createUser({ role: Role.COLLABORATOR });
     const res = await request(app).get("/api/users").set("Authorization", authHeader(collaborator));
     expect(res.status).toBe(403);

@@ -84,7 +84,13 @@ export function FinancialsTab({ projectId }: { projectId: number }) {
           <label className="form-label" htmlFor="receipt">
             קבלה
           </label>
-          <input id="receipt" ref={fileRef} type="file" accept="image/*" className="file-field" />
+          <input
+            id="receipt"
+            ref={fileRef}
+            type="file"
+            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+            className="file-field"
+          />
         </div>
         <button type="submit" disabled={saving} className="btn btn-primary">
           {saving ? "שומר..." : "הוספת תשלום"}

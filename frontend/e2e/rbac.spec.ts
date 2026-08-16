@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { adminToken, apiCreateProject, apiCreateUser, loginViaUi } from "./helpers/api";
+import { apiCreateProject, apiCreateUser, createEntrepreneur, loginViaUi } from "./helpers/api";
 
 test.describe("collaborator RBAC", () => {
   const email = `rbac-collab-${Date.now()}@e2e.test`;
@@ -8,7 +8,7 @@ test.describe("collaborator RBAC", () => {
   let otherProjectName: string;
 
   test.beforeAll(async () => {
-    const token = await adminToken();
+    const { token } = await createEntrepreneur();
     const user = await apiCreateUser(token, {
       name: "שרברב RBAC",
       email,

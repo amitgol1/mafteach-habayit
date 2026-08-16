@@ -16,10 +16,12 @@ function filenameFromUrl(url: string) {
 
 describe("file uploads", () => {
   let admin: Awaited<ReturnType<typeof createUser>>;
+  let entrepreneur: Awaited<ReturnType<typeof createUser>>;
 
   beforeEach(async () => {
     await resetDb();
-    admin = await createUser({ role: Role.ADMIN });
+    admin = await createUser({ role: Role.SUPER_ADMIN });
+    entrepreneur = await createUser({ role: Role.ENTREPRENEUR, email: "entrepreneur@test.local" });
   });
 
   it("uses the test UPLOADS_DIR, not the real /uploads directory", () => {
@@ -29,7 +31,9 @@ describe("file uploads", () => {
 
   describe("POST /api/projects/:projectId/financials (receipt)", () => {
     it("accepts a valid image and stores it under the test uploads dir", async () => {
-      const project = await prisma.project.create({ data: { name: "P", location: "L", totalBudget: 1000 } });
+      const project = await prisma.project.create({
+        data: { name: "P", location: "L", totalBudget: 1000, entrepreneurId: entrepreneur.id },
+      });
 
       const res = await request(app)
         .post(`/api/projects/${project.id}/financials`)
@@ -46,7 +50,9 @@ describe("file uploads", () => {
     });
 
     it("rejects a disallowed mime type", async () => {
-      const project = await prisma.project.create({ data: { name: "P", location: "L", totalBudget: 1000 } });
+      const project = await prisma.project.create({
+        data: { name: "P", location: "L", totalBudget: 1000, entrepreneurId: entrepreneur.id },
+      });
 
       const res = await request(app)
         .post(`/api/projects/${project.id}/financials`)
@@ -56,11 +62,28 @@ describe("file uploads", () => {
 
       expect(res.status).toBe(400);
     });
+
+    it("accepts a PDF receipt and categorizes it as a document", async () => {
+      const project = await prisma.project.create({
+        data: { name: "P", location: "L", totalBudget: 1000, entrepreneurId: entrepreneur.id },
+      });
+
+      const res = await request(app)
+        .post(`/api/projects/${project.id}/financials`)
+        .set("Authorization", authHeader(admin))
+        .field("amountPaid", "100")
+        .attach("receipt", Buffer.from("%PDF-1.4 fake"), { filename: "invoice.pdf", contentType: "application/pdf" });
+
+      expect(res.status).toBe(201);
+      expect(res.body.receiptMediaUrl).toMatch(/^\/uploads\//);
+    });
   });
 
   describe("POST /api/sub-phases/:id/updates (media)", () => {
     async function buildSubPhase() {
-      const project = await prisma.project.create({ data: { name: "P", location: "L" } });
+      const project = await prisma.project.create({
+        data: { name: "P", location: "L", entrepreneurId: entrepreneur.id },
+      });
       const unit = await prisma.unit.create({ data: { projectId: project.id, identifier: "House A" } });
       const phase = await prisma.phase.create({ data: { unitId: unit.id, name: "Skeleton", order: 1 } });
       return prisma.subPhase.create({ data: { phaseId: phase.id, name: "Underground" } });
@@ -72,7 +95,7 @@ describe("file uploads", () => {
       const res = await request(app)
         .post(`/api/sub-phases/${subPhase.id}/updates`)
         .set("Authorization", authHeader(admin))
-        .field("messageText", "Progress photo")
+        .field("description", "Progress photo")
         .attach("media", tinyPng, { filename: "photo.png", contentType: "image/png" });
 
       expect(res.status).toBe(201);
@@ -82,6 +105,27 @@ describe("file uploads", () => {
       const storedPath = path.join(testUploadsDir, filenameFromUrl(res.body.mediaUrl));
       expect(fs.existsSync(storedPath)).toBe(true);
       expect(fs.existsSync(path.join(realUploadsDir, filenameFromUrl(res.body.mediaUrl)))).toBe(false);
+    });
+
+    it("accepts a PDF and a Word doc, categorized as DOCUMENT", async () => {
+      const subPhase = await buildSubPhase();
+
+      const pdfRes = await request(app)
+        .post(`/api/sub-phases/${subPhase.id}/updates`)
+        .set("Authorization", authHeader(admin))
+        .attach("media", Buffer.from("%PDF-1.4 fake"), { filename: "plan.pdf", contentType: "application/pdf" });
+      expect(pdfRes.status).toBe(201);
+      expect(pdfRes.body.mediaType).toBe("DOCUMENT");
+
+      const docRes = await request(app)
+        .post(`/api/sub-phases/${subPhase.id}/updates`)
+        .set("Authorization", authHeader(admin))
+        .attach("media", Buffer.from("fake docx"), {
+          filename: "contract.docx",
+          contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        });
+      expect(docRes.status).toBe(201);
+      expect(docRes.body.mediaType).toBe("DOCUMENT");
     });
 
     it("blocks an unassigned COLLABORATOR even with a valid file", async () => {

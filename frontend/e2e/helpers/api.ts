@@ -37,19 +37,44 @@ function authHeaders(token: string) {
   return { Authorization: `Bearer ${token}` };
 }
 
+export type ApiRole = "SUPER_ADMIN" | "ENTREPRENEUR" | "COLLABORATOR";
+
 export interface ApiUser {
   id: number;
   name: string;
   email: string;
-  role: "ADMIN" | "COLLABORATOR";
+  role: ApiRole;
   trade: string | null;
 }
 
 export function apiCreateUser(
   token: string,
-  payload: { name: string; email: string; password: string; role: "ADMIN" | "COLLABORATOR"; trade?: string }
+  payload: { name: string; email: string; password: string; role: ApiRole; trade?: string }
 ): Promise<ApiUser> {
   return request("/users", { method: "POST", headers: authHeaders(token), body: JSON.stringify(payload) });
+}
+
+// Seeded ENTREPRENEUR (owns any pre-tenancy data backfilled by prisma/seed.ts).
+// Prefer `createEntrepreneur()` for test fixtures needing their own quota
+// headroom and tenant isolation — this account accumulates state across the
+// whole e2e run (shared e2e.db, seeded once for the run) and is only 5
+// projects / 20 users away from tripping the quotas other tests rely on.
+export const ENTREPRENEUR_EMAIL = "yakov@y.com";
+export const ENTREPRENEUR_PASSWORD = "Yakov123!";
+
+// Creates a fresh, throwaway ENTREPRENEUR (via the seeded SUPER_ADMIN, who has
+// no creation quota) and returns a ready-to-use token for that entrepreneur.
+// Use this for any fixture that creates projects/users, so tests never share
+// — and never accidentally trip — another test's 5-project/20-user quota.
+export async function createEntrepreneur(): Promise<{ id: number; name: string; email: string; token: string }> {
+  const admin = await adminToken();
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const name = `יזם בדיקה ${suffix}`;
+  const email = `entrepreneur-${suffix}@e2e.test`;
+  const password = "password123";
+  const user = await apiCreateUser(admin, { name, email, password, role: "ENTREPRENEUR" });
+  const token = await apiLogin(email, password);
+  return { id: user.id, name, email, token };
 }
 
 export function apiPatchUser(
@@ -78,6 +103,7 @@ export function apiCreateProject(
     totalBudget?: number;
     currentStage?: string;
     participants?: { trade: string; userId: number }[];
+    entrepreneurId?: number;
   }
 ): Promise<ApiProject> {
   return request("/projects", { method: "POST", headers: authHeaders(token), body: JSON.stringify(payload) });
@@ -106,6 +132,36 @@ export interface ApiSubPhase {
 
 export function apiCreateSubPhase(token: string, phaseId: number, name: string): Promise<ApiSubPhase> {
   return request("/sub-phases", { method: "POST", headers: authHeaders(token), body: JSON.stringify({ phaseId, name }) });
+}
+
+export interface ApiUpdate {
+  id: number;
+  subject: string | null;
+  description: string | null;
+  mediaUrl: string | null;
+}
+
+// Posts directly to the updates endpoint's multipart form (subject/description
+// text fields), bypassing the UI, so tests can seed many updates quickly (e.g.
+// for pagination) without the JSON `request` helper above, which can't send
+// multipart/form-data.
+export async function apiCreateSubPhaseUpdate(
+  token: string,
+  subPhaseId: number,
+  payload: { subject?: string; description?: string }
+): Promise<ApiUpdate> {
+  const formData = new FormData();
+  if (payload.subject) formData.append("subject", payload.subject);
+  if (payload.description) formData.append("description", payload.description);
+  const res = await fetch(`${API_BASE}/sub-phases/${subPhaseId}/updates`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: formData,
+  });
+  if (!res.ok) {
+    throw new Error(`POST /sub-phases/${subPhaseId}/updates failed: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
 }
 
 export async function loginViaUi(page: Page, email: string, password: string): Promise<void> {

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { adminToken, apiCreateProject, loginAsAdminViaUi } from "./helpers/api";
+import { apiCreateProject, createEntrepreneur, loginAsAdminViaUi } from "./helpers/api";
 
 // Counterpart to a backend fix: totalDue must come from the project's own
 // totalBudget, not some other value. Using an unusual budget number makes a
@@ -7,7 +7,7 @@ import { adminToken, apiCreateProject, loginAsAdminViaUi } from "./helpers/api";
 const BUDGET = 87650;
 
 test("total due matches the project's budget; adding a payment updates totals live", async ({ page }) => {
-  const token = await adminToken();
+  const { token } = await createEntrepreneur();
   const projectName = `פרויקט כספים ${Date.now()}`;
   const project = await apiCreateProject(token, {
     name: projectName,

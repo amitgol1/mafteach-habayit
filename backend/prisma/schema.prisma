@@ -9,9 +9,9 @@ datasource db {
 
 // SQLite has no native enum support in Prisma; these fields hold string
 // constants enforced in application code — see src/constants.ts.
-// Role: "ADMIN" | "COLLABORATOR"
+// Role: "SUPER_ADMIN" | "ENTREPRENEUR" | "COLLABORATOR"
 // PhaseStatus: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"
-// MediaType: "IMAGE" | "VIDEO"
+// MediaType: "IMAGE" | "VIDEO" | "DOCUMENT"
 // Trade: "ARCHITECT" | "CONSTRUCTION_ENGINEER" | "INTERIOR_DESIGNER" | "ELECTRICIAN"
 //        | "PLUMBER" | "COMMUNICATIONS_TECHNICIAN" | "MAIN_CONTRACTOR"
 // ProjectStage: "SKELETON" | "ELECTRICITY" | "PLUMBING" | "PLASTER" | "FLOORING"
@@ -23,27 +23,39 @@ model User {
   email        String   @unique
   passwordHash String
   role         String
-  trade        String? // e.g. "ELECTRICIAN", null for Admins — see Trade in src/constants.ts
+  trade        String? // e.g. "ELECTRICIAN", null for SUPER_ADMIN/ENTREPRENEUR — see Trade in src/constants.ts
   createdAt    DateTime @default(now())
+  createdById  Int? // who created this user (SUPER_ADMIN creates ENTREPRENEURs, ENTREPRENEUR creates COLLABORATORs); null for bootstrap/seed-created users
+
+  createdBy    User?  @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdUsers User[] @relation("UserCreatedBy")
 
   assignments  PhaseAssignment[]
   updates      Update[]
   participants ProjectParticipant[]
+  projects     Project[] // projects owned by this user when role = ENTREPRENEUR
+
+  @@index([createdById])
 }
 
 model Project {
-  id            Int      @id @default(autoincrement())
-  name          String
-  location      String
-  overallStatus String   @default("NOT_STARTED")
-  owners        String? // free text, project owners/clients
-  totalBudget   Float?
-  currentStage  String? // ProjectStage vocabulary — distinct from overallStatus, see src/constants.ts
-  createdAt     DateTime @default(now())
+  id             Int      @id @default(autoincrement())
+  name           String
+  location       String
+  overallStatus  String   @default("NOT_STARTED")
+  owners         String? // free text, project owners/clients
+  totalBudget    Float?
+  currentStage   String? // ProjectStage vocabulary — distinct from overallStatus, see src/constants.ts
+  createdAt      DateTime @default(now())
+  entrepreneurId Int // owning ENTREPRENEUR; required — every project has exactly one paying-client owner, see team-lead contract
 
+  entrepreneur      User                 @relation(fields: [entrepreneurId], references: [id], onDelete: Restrict)
   units             Unit[]
   financialRecords  FinancialRecord[]
   participants      ProjectParticipant[]
+  updates           Update[]
+
+  @@index([entrepreneurId])
 }
 
 model Unit {
@@ -115,18 +127,22 @@ model ProjectParticipant {
 }
 
 model Update {
-  id          Int       @id @default(autoincrement())
-  subPhaseId  Int
+  id          Int      @id @default(autoincrement())
+  subPhaseId  Int? // exactly one of subPhaseId / projectId is set — enforced by route design, not a DB constraint (see team-lead contract)
+  projectId   Int?
   userId      Int
-  messageText String?
+  subject     String? // short title; optional, see team-lead contract for validation rule
+  description String? // free-text body; was "messageText" — renamed for clarity now that subject exists alongside it
   mediaUrl    String? // local path under /uploads
   mediaType   String? // "IMAGE" | "VIDEO"
   timestamp   DateTime @default(now())
 
-  subPhase SubPhase @relation(fields: [subPhaseId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subPhase SubPhase? @relation(fields: [subPhaseId], references: [id], onDelete: Cascade)
+  project  Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([subPhaseId])
+  @@index([projectId])
 }
 
 model FinancialRecord {

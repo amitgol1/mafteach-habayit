@@ -10,6 +10,7 @@ export interface ProjectFormPayload {
   totalBudget?: number;
   currentStage?: ProjectStage;
   participants?: { trade: Trade; userId: number }[];
+  entrepreneurId?: number;
 }
 
 export interface ProjectFormInitialValues {
@@ -30,6 +31,8 @@ interface ProjectFormFieldsProps {
   resetOnSuccess?: boolean;
   /** When true, always includes `participants` in the payload (even if empty), so submit replaces the full set. */
   alwaysIncludeParticipants?: boolean;
+  /** When true, renders a required entrepreneur-picker (SUPER_ADMIN creating a project on an entrepreneur's behalf). */
+  entrepreneurPicker?: boolean;
   onSubmit: (payload: ProjectFormPayload) => Promise<void>;
 }
 
@@ -41,6 +44,7 @@ export function ProjectFormFields({
   errorMessage,
   resetOnSuccess = false,
   alwaysIncludeParticipants = false,
+  entrepreneurPicker = false,
   onSubmit,
 }: ProjectFormFieldsProps) {
   const [name, setName] = useState(initialValues?.name ?? "");
@@ -50,6 +54,10 @@ export function ProjectFormFields({
     initialValues?.totalBudget != null ? String(initialValues.totalBudget) : ""
   );
   const [currentStage, setCurrentStage] = useState<ProjectStage | "">(initialValues?.currentStage ?? "");
+  const [entrepreneurId, setEntrepreneurId] = useState<number | "">("");
+  const [entrepreneurs, setEntrepreneurs] = useState<User[]>([]);
+  const [loadingEntrepreneurs, setLoadingEntrepreneurs] = useState(entrepreneurPicker);
+  const [entrepreneursLoadError, setEntrepreneursLoadError] = useState(false);
   const [usersByTrade, setUsersByTrade] = useState<Partial<Record<Trade, User[]>>>({});
   const [selectedUserByTrade, setSelectedUserByTrade] = useState<Partial<Record<Trade, number>>>(() => {
     const map: Partial<Record<Trade, number>> = {};
@@ -79,6 +87,17 @@ export function ProjectFormFields({
       .finally(() => setLoadingUsers(false));
   }, []);
 
+  useEffect(() => {
+    if (!entrepreneurPicker) return;
+    setLoadingEntrepreneurs(true);
+    setEntrepreneursLoadError(false);
+    api
+      .get<User[]>("/users")
+      .then((res) => setEntrepreneurs(res.data.filter((u) => u.role === "ENTREPRENEUR")))
+      .catch(() => setEntrepreneursLoadError(true))
+      .finally(() => setLoadingEntrepreneurs(false));
+  }, [entrepreneurPicker]);
+
   function handleTradeChange(trade: Trade, value: string) {
     setSelectedUserByTrade((prev) => {
       const next = { ...prev };
@@ -91,6 +110,7 @@ export function ProjectFormFields({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim() || !location.trim()) return;
+    if (entrepreneurPicker && !entrepreneurId) return;
     setError(null);
     setSuccess(null);
     setSaving(true);
@@ -107,6 +127,7 @@ export function ProjectFormFields({
         totalBudget: totalBudget ? Number(totalBudget) : undefined,
         currentStage: currentStage || undefined,
         participants: participants.length > 0 || alwaysIncludeParticipants ? participants : undefined,
+        entrepreneurId: entrepreneurPicker ? Number(entrepreneurId) : undefined,
       });
       setSuccess(successMessage);
       if (resetOnSuccess) {
@@ -116,6 +137,7 @@ export function ProjectFormFields({
         setTotalBudget("");
         setCurrentStage("");
         setSelectedUserByTrade({});
+        setEntrepreneurId("");
       }
     } catch (err) {
       const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error ?? errorMessage;
@@ -128,6 +150,34 @@ export function ProjectFormFields({
   return (
     <form onSubmit={handleSubmit} className="panel panel-edge space-y-5 p-4 sm:p-5">
       <div className="grid gap-4 sm:grid-cols-2">
+        {entrepreneurPicker && (
+          <div className="sm:col-span-2">
+            <label className="form-label" htmlFor="entrepreneurId">
+              יזם
+            </label>
+            {loadingEntrepreneurs && <p className="text-sm text-ink-soft">טוען יזמים...</p>}
+            {entrepreneursLoadError && (
+              <p className="text-sm text-brick-deep">אירעה שגיאה בטעינת רשימת היזמים.</p>
+            )}
+            {!loadingEntrepreneurs && !entrepreneursLoadError && (
+              <select
+                id="entrepreneurId"
+                required
+                value={entrepreneurId}
+                onChange={(e) => setEntrepreneurId(e.target.value ? Number(e.target.value) : "")}
+                disabled={entrepreneurs.length === 0}
+                className="form-field"
+              >
+                <option value="">{entrepreneurs.length === 0 ? "אין יזמים זמינים" : "בחרו יזם"}</option>
+                {entrepreneurs.map((entrepreneur) => (
+                  <option key={entrepreneur.id} value={entrepreneur.id}>
+                    {entrepreneur.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
         <div>
           <label className="form-label" htmlFor="name">
             שם הפרויקט
