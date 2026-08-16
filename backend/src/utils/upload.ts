@@ -24,12 +24,18 @@ const allowedMimeTypes = new Set([
   "video/webm",
 ]);
 
+export class UnsupportedFileTypeError extends Error {
+  constructor() {
+    super("Unsupported file type");
+  }
+}
+
 export const upload = multer({
   storage,
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!allowedMimeTypes.has(file.mimetype)) {
-      cb(new Error("Unsupported file type"));
+      cb(new UnsupportedFileTypeError());
       return;
     }
     cb(null, true);

@@ -9,7 +9,7 @@ import { subPhasesRouter } from "./routes/subPhases";
 import { unitsRouter } from "./routes/units";
 import { updatesRouter } from "./routes/updates";
 import { usersRouter } from "./routes/users";
-import { uploadsRoot } from "./utils/upload";
+import { UnsupportedFileTypeError, uploadsRoot } from "./utils/upload";
 
 export const app = express();
 
@@ -29,6 +29,10 @@ app.use("/api", updatesRouter);
 app.use("/api", financialRouter);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof UnsupportedFileTypeError) {
+    res.status(400).json({ error: err.message });
+    return;
+  }
   console.error(err);
   const message = err instanceof Error ? err.message : "Internal server error";
   res.status(500).json({ error: message });
