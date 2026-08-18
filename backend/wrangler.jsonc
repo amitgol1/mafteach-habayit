@@ -1,0 +1,36 @@
+/**
+ * Cloudflare Workers config for the Hono POC entry point (src/worker.ts).
+ * This is separate from and does not affect the existing Express app
+ * (src/app.ts / src/index.ts), which keeps running via `npm run dev`.
+ *
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mafteach-habayit-api",
+  "main": "src/worker.ts",
+  "compatibility_date": "2024-09-23",
+
+  // D1 binding. database_id is a placeholder — no Cloudflare account/auth
+  // exists for this POC yet. `wrangler dev` runs Miniflare locally by
+  // default (no --remote flag), which emulates D1 against local SQLite
+  // state under .wrangler/state and never contacts the Cloudflare API, so
+  // this placeholder id works fine for local dev. Replace with a real id
+  // (from `wrangler d1 create`) once/if this POC needs a live D1 database.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mafteach-habayit-db",
+      "database_id": "local-dev-placeholder-mafteach-habayit-db"
+    }
+  ],
+
+  // R2 binding. Same local-only reasoning as D1 above — Miniflare emulates
+  // R2 locally without needing the bucket to exist in a real account.
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS_BUCKET",
+      "bucket_name": "mafteach-habayit-uploads"
+    }
+  ]
+}

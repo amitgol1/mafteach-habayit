@@ -12,5 +12,14 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/worker.ts",
+    "src/worker-env.ts",
+    "src/db/client.ts",
+    "src/db/seed.ts",
+    "src/middleware-worker",
+    "src/routes-worker",
+    "src/utils-worker"
+  ]
 }

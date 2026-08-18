@@ -5,6 +5,7 @@ build/
 # env
 .env
 .env.local
+backend/.dev.vars
 
 # local db
 backend/prisma/dev.db
@@ -25,6 +26,10 @@ backend/tests-tmp/
 frontend/playwright-report/
 frontend/test-results/
 frontend/blob-report/
+
+# Cloudflare Workers local dev (Miniflare state + generated env types)
+backend/.wrangler/
+backend/worker-configuration.d.ts
 
 # logs
 *.log
