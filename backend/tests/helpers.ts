@@ -34,7 +34,7 @@ export async function createUser(opts: {
 }
 
 export function tokenFor(user: { id: number; role: string }) {
-  return jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: "1h" });
+  return jwt.sign({ id: user.id, role: user.role, kind: "session" }, process.env.JWT_SECRET!, { expiresIn: "1h" });
 }
 
 export function authHeader(user: { id: number; role: string }) {

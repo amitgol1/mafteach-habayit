@@ -118,6 +118,28 @@ usersRouter.patch(
   })
 );
 
+usersRouter.post(
+  "/:id/reset-totp",
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const id = Number(req.params.id);
+    const target = await prisma.user.findUnique({ where: { id } });
+    if (!target) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    if (!assertUserOwnership(target, req.user!)) {
+      res.status(403).json({ error: "Not authorized for this user" });
+      return;
+    }
+    const user = await prisma.user.update({
+      where: { id },
+      data: { totpSecret: null, totpConfirmedAt: null },
+      select: userSelect,
+    });
+    res.json(user);
+  })
+);
+
 usersRouter.delete(
   "/:id",
   asyncHandler(async (req: AuthedRequest, res) => {

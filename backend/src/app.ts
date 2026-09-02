@@ -14,7 +14,7 @@ import { UnsupportedFileTypeError, uploadsRoot } from "./utils/upload";
 
 export const app = express();
 
-app.use(cors());
+app.use(cors({ exposedHeaders: ["X-Refreshed-Token"] }));
 app.use(express.json());
 app.use("/uploads", express.static(uploadsRoot));
 

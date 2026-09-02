@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { Project } from "../api/types";
+import type { Project, Unit } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { FinancialsTab } from "../components/FinancialsTab";
 import { Layout } from "../components/Layout";
@@ -40,6 +40,10 @@ export function ProjectPage() {
       .get<Project>(`/projects/${id}`)
       .then((res) => setProject(res.data))
       .catch(() => setLoadError(true));
+  }
+
+  function appendUnits(units: Unit[]) {
+    setProject((prev) => (prev ? { ...prev, units: [...prev.units, ...units] } : prev));
   }
 
   if (loadError) {
@@ -115,6 +119,7 @@ export function ProjectPage() {
             selectedSubPhaseId={selectedSubPhaseId}
             onSelectSubPhase={setSelectedSubPhaseId}
             onChanged={fetchProject}
+            onUnitsGenerated={appendUnits}
           />
           <div className="panel h-[32rem] p-4 md:h-[38rem]">
             {selectedSubPhaseId ? (
@@ -126,7 +131,7 @@ export function ProjectPage() {
         </div>
       )}
 
-      {tab === "financials" && isManager && <FinancialsTab projectId={project.id} />}
+      {tab === "financials" && isManager && <FinancialsTab projectId={project.id} project={project} />}
     </Layout>
   );
 }

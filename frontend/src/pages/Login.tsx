@@ -1,5 +1,8 @@
-import { useState, type FormEvent } from "react";
+import axios from "axios";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { api } from "../api/client";
+import type { User } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { HouseIllustration } from "../components/HouseIllustration";
 
@@ -9,26 +12,36 @@ const highlights = [
   { value: "₪", label: "שולם מול יתרה" },
 ];
 
-export function Login() {
-  const { login } = useAuth();
-  const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+type LoginResponse =
+  | { status: "totp_setup_required"; pendingToken: string; user: User }
+  | { status: "totp_required"; pendingToken: string; user: User };
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      await login(email, password);
-      navigate("/");
-    } catch {
-      setError("אימייל או סיסמה שגויים");
-    } finally {
-      setLoading(false);
-    }
+type Step =
+  | { kind: "credentials"; error?: string }
+  | { kind: "totp_setup"; pendingToken: string; user: User }
+  | { kind: "totp_verify"; pendingToken: string; user: User };
+
+function pendingAuthErrorMessage(err: unknown): string | undefined {
+  if (!axios.isAxiosError(err)) return undefined;
+  return (err.response?.data as { error?: string } | undefined)?.error;
+}
+
+export function Login() {
+  const { completeLogin } = useAuth();
+  const navigate = useNavigate();
+  const [step, setStep] = useState<Step>({ kind: "credentials" });
+
+  function handleLoggedIn(token: string, user: User) {
+    completeLogin(token, user);
+    navigate("/");
+  }
+
+  function handlePendingExpired() {
+    setStep({ kind: "credentials", error: "פג תוקף החיבור, נא להתחבר שוב" });
+  }
+
+  function handleCredentialsAccepted(data: LoginResponse) {
+    setStep({ kind: data.status === "totp_setup_required" ? "totp_setup" : "totp_verify", pendingToken: data.pendingToken, user: data.user });
   }
 
   return (
@@ -55,55 +68,291 @@ export function Login() {
       </section>
 
       <section className="flex items-center justify-center px-4 py-12 sm:px-8">
-        <form onSubmit={handleSubmit} className="panel panel-edge-brass w-full max-w-sm p-6 sm:p-8">
-          <p className="eyebrow text-brass-deep">כניסה למערכת</p>
-          <h2 className="mt-2 font-display text-2xl text-ink">ברוכים השבים</h2>
-          <p className="mt-2 text-sm text-ink-soft">היכנסו עם הפרטים שקיבלתם ממנהל העבודה.</p>
-
-          <div className="mt-6 space-y-4">
-            <div>
-              <label className="form-label" htmlFor="email">
-                אימייל
-              </label>
-              <input
-                id="email"
-                type="email"
-                dir="ltr"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="form-field text-start"
-              />
-            </div>
-            <div>
-              <label className="form-label" htmlFor="password">
-                סיסמה
-              </label>
-              <input
-                id="password"
-                type="password"
-                dir="ltr"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="form-field text-start"
-              />
-            </div>
-          </div>
-
-          {error && (
-            <p className="mt-4 rounded-lg border border-brick/30 bg-brick-tint px-3 py-2 text-sm text-brick-deep">
-              {error}
-            </p>
-          )}
-
-          <button type="submit" disabled={loading} className="btn btn-primary mt-6 w-full">
-            {loading ? "מתחבר..." : "כניסה"}
-          </button>
-        </form>
+        {step.kind === "credentials" && (
+          <CredentialsForm initialError={step.error} onLoggedIn={handleCredentialsAccepted} />
+        )}
+        {step.kind === "totp_setup" && (
+          <TotpSetupForm
+            pendingToken={step.pendingToken}
+            user={step.user}
+            onComplete={handleLoggedIn}
+            onExpired={handlePendingExpired}
+          />
+        )}
+        {step.kind === "totp_verify" && (
+          <TotpVerifyForm
+            pendingToken={step.pendingToken}
+            user={step.user}
+            onComplete={handleLoggedIn}
+            onExpired={handlePendingExpired}
+          />
+        )}
       </section>
     </div>
+  );
+}
+
+interface CredentialsFormProps {
+  initialError?: string;
+  onLoggedIn: (data: LoginResponse) => void;
+}
+
+function CredentialsForm({ initialError, onLoggedIn }: CredentialsFormProps) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(initialError ?? null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const { data } = await api.post<LoginResponse>("/auth/login", { email, password });
+      onLoggedIn(data);
+    } catch {
+      setError("אימייל או סיסמה שגויים");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="panel panel-edge-brass w-full max-w-sm p-6 sm:p-8">
+      <p className="eyebrow text-brass-deep">כניסה למערכת</p>
+      <h2 className="mt-2 font-display text-2xl text-ink">ברוכים השבים</h2>
+      <p className="mt-2 text-sm text-ink-soft">היכנסו עם הפרטים שקיבלתם ממנהל העבודה.</p>
+
+      <div className="mt-6 space-y-4">
+        <div>
+          <label className="form-label" htmlFor="email">
+            אימייל
+          </label>
+          <input
+            id="email"
+            type="email"
+            dir="ltr"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="form-field text-start"
+          />
+        </div>
+        <div>
+          <label className="form-label" htmlFor="password">
+            סיסמה
+          </label>
+          <input
+            id="password"
+            type="password"
+            dir="ltr"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="form-field text-start"
+          />
+        </div>
+      </div>
+
+      {error && (
+        <p className="mt-4 rounded-lg border border-brick/30 bg-brick-tint px-3 py-2 text-sm text-brick-deep">
+          {error}
+        </p>
+      )}
+
+      <button type="submit" disabled={loading} className="btn btn-primary mt-6 w-full">
+        {loading ? "מתחבר..." : "כניסה"}
+      </button>
+    </form>
+  );
+}
+
+interface TotpStepProps {
+  pendingToken: string;
+  user: User;
+  onComplete: (token: string, user: User) => void;
+  onExpired: () => void;
+}
+
+function TotpSetupForm({ pendingToken, user, onComplete, onExpired }: TotpStepProps) {
+  const [setupData, setSetupData] = useState<{ secret: string; qrCodeDataUrl: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const requestedRef = useRef(false);
+
+  useEffect(() => {
+    // /auth/totp/setup overwrites the user's secret on every call — StrictMode's
+    // dev-only double-invoke would otherwise fire it twice per mount, racing
+    // two different secrets against each other (whichever DB write lands last
+    // may not match whichever response the DOM ends up showing). The ref
+    // guard survives StrictMode's mount→cleanup→mount cycle (same component
+    // instance), so only the first invocation actually fires the request.
+    // No cancelled-flag gating on the response: StrictMode's synthetic
+    // cleanup runs once regardless of the guard above, so a locally-scoped
+    // `cancelled` flag would falsely discard this single real request's own
+    // response. React 18 safely no-ops a state update on an unmounted
+    // component, so nothing further is needed for a genuine unmount either.
+    if (requestedRef.current) return;
+    requestedRef.current = true;
+    axios
+      .post<{ secret: string; otpauthUrl: string; qrCodeDataUrl: string }>(
+        "/api/auth/totp/setup",
+        {},
+        { headers: { Authorization: `Bearer ${pendingToken}` } }
+      )
+      .then(({ data }) => {
+        setSetupData({ secret: data.secret, qrCodeDataUrl: data.qrCodeDataUrl });
+      })
+      .catch(() => {
+        onExpired();
+      });
+  }, [pendingToken, onExpired]);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setCodeError(null);
+    setSubmitting(true);
+    try {
+      const { data } = await axios.post<{ token: string; user: User }>(
+        "/api/auth/totp/confirm",
+        { code },
+        { headers: { Authorization: `Bearer ${pendingToken}` } }
+      );
+      onComplete(data.token, data.user);
+    } catch (err) {
+      if (pendingAuthErrorMessage(err) === "Invalid code") {
+        setCodeError("קוד שגוי, נסו שוב");
+      } else {
+        onExpired();
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="panel panel-edge-brass w-full max-w-sm p-6 sm:p-8">
+      <p className="eyebrow text-brass-deep">הגדרת אימות דו-שלבי</p>
+      <h2 className="mt-2 font-display text-2xl text-ink">שלום, {user.name}</h2>
+      <p className="mt-2 text-sm text-ink-soft">
+        סרקו את קוד ה-QR באמצעות אפליקציית אימות (כגון Google Authenticator), ולאחר מכן הזינו את הקוד שהיא מציגה.
+      </p>
+
+      {!setupData && <p className="mt-6 text-sm text-ink-soft">טוען...</p>}
+
+      {setupData && (
+        <>
+          <div className="mt-6 flex justify-center">
+            <img
+              src={setupData.qrCodeDataUrl}
+              alt="קוד QR להגדרת אימות דו-שלבי"
+              data-testid="totp-qr-code"
+              className="h-40 w-40 rounded-lg border border-limestone-deep"
+            />
+          </div>
+          <p className="mt-4 text-xs text-ink-soft">
+            או הזינו קוד זה ידנית:{" "}
+            <span className="numeric font-medium text-ink" dir="ltr" data-testid="totp-manual-secret">
+              {setupData.secret}
+            </span>
+          </p>
+
+          <form onSubmit={handleSubmit} className="mt-6">
+            <label className="form-label" htmlFor="totp-code">
+              קוד בן 6 ספרות
+            </label>
+            <input
+              id="totp-code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              dir="ltr"
+              required
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className="form-field text-start"
+              data-testid="totp-code-input"
+            />
+
+            {codeError && (
+              <p className="mt-4 rounded-lg border border-brick/30 bg-brick-tint px-3 py-2 text-sm text-brick-deep">
+                {codeError}
+              </p>
+            )}
+
+            <button type="submit" disabled={submitting} className="btn btn-primary mt-6 w-full">
+              {submitting ? "מאמת..." : "אישור והפעלה"}
+            </button>
+          </form>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TotpVerifyForm({ pendingToken, user, onComplete, onExpired }: TotpStepProps) {
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setCodeError(null);
+    setSubmitting(true);
+    try {
+      const { data } = await axios.post<{ token: string; user: User }>(
+        "/api/auth/totp/verify",
+        { code },
+        { headers: { Authorization: `Bearer ${pendingToken}` } }
+      );
+      onComplete(data.token, data.user);
+    } catch (err) {
+      if (pendingAuthErrorMessage(err) === "Invalid code") {
+        setCodeError("קוד שגוי, נסו שוב");
+      } else {
+        onExpired();
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="panel panel-edge-brass w-full max-w-sm p-6 sm:p-8">
+      <p className="eyebrow text-brass-deep">אימות דו-שלבי</p>
+      <h2 className="mt-2 font-display text-2xl text-ink">שלום, {user.name}</h2>
+      <p className="mt-2 text-sm text-ink-soft">הזינו את הקוד בן 6 הספרות מאפליקציית האימות שלכם.</p>
+
+      <div className="mt-6">
+        <label className="form-label" htmlFor="totp-code">
+          קוד בן 6 ספרות
+        </label>
+        <input
+          id="totp-code"
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          dir="ltr"
+          required
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          className="form-field text-start"
+          data-testid="totp-code-input"
+        />
+      </div>
+
+      {codeError && (
+        <p className="mt-4 rounded-lg border border-brick/30 bg-brick-tint px-3 py-2 text-sm text-brick-deep">
+          {codeError}
+        </p>
+      )}
+
+      <button type="submit" disabled={submitting} className="btn btn-primary mt-6 w-full">
+        {submitting ? "מאמת..." : "כניסה"}
+      </button>
+    </form>
   );
 }

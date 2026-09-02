@@ -9,6 +9,7 @@ export type Trade =
   | "PLUMBER"
   | "COMMUNICATIONS_TECHNICIAN"
   | "MAIN_CONTRACTOR";
+export type ProjectType = "RESIDENTIAL_BUILDING" | "PRIVATE_HOUSES";
 export type ProjectStage =
   | "SKELETON"
   | "ELECTRICITY"
@@ -68,6 +69,7 @@ export interface Project {
   owners: string | null;
   totalBudget: number | null;
   currentStage: ProjectStage | null;
+  projectType: ProjectType | null;
   createdAt: string;
   units: Unit[];
   participants?: ProjectParticipant[];
@@ -95,7 +97,9 @@ export interface UpdatesPage {
 export interface FinancialRecord {
   id: number;
   projectId: number;
+  unitId: number | null;
   phaseId: number | null;
+  subPhaseId: number | null;
   amountPaid: number;
   receiptMediaUrl: string | null;
   timestamp: string;

@@ -88,7 +88,7 @@ test.describe("ENTREPRENEUR user management", () => {
     page,
   }) => {
     const entrepreneur = await createEntrepreneur();
-    await loginViaUi(page, entrepreneur.email, "password123");
+    await loginViaUi(page, entrepreneur.email, "password123", entrepreneur.totpSecret);
     await page.getByRole("link", { name: "ניהול", exact: true }).click();
     await page.getByRole("button", { name: "ניהול משתמשים" }).click();
     await expect(page.getByRole("heading", { name: "הוספת משתמש חדש" })).toBeVisible();

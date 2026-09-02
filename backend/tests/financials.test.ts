@@ -75,4 +75,117 @@ describe("/api/projects/:projectId/financials", () => {
       .set("Authorization", authHeader(admin));
     expect(afterRes.body.totals.totalPaid).toBe(0);
   });
+
+  describe("unit/phase/sub-phase linkage", () => {
+    async function createProjectTree(entrepreneurId: number) {
+      const project = await prisma.project.create({
+        data: { name: "P", location: "L", totalBudget: 1000, entrepreneurId },
+      });
+      const unit = await prisma.unit.create({ data: { projectId: project.id, identifier: "House A" } });
+      const phase = await prisma.phase.create({ data: { unitId: unit.id, name: "Skeleton", order: 1 } });
+      const subPhase = await prisma.subPhase.create({ data: { phaseId: phase.id, name: "Underground" } });
+      return { project, unit, phase, subPhase };
+    }
+
+    it("persists a unit-only payment", async () => {
+      const { project, unit } = await createProjectTree(entrepreneur.id);
+      const res = await request(app)
+        .post(`/api/projects/${project.id}/financials`)
+        .set("Authorization", authHeader(admin))
+        .send({ amountPaid: "100", unitId: String(unit.id) });
+      expect(res.status).toBe(201);
+      expect(res.body.unitId).toBe(unit.id);
+      expect(res.body.phaseId).toBeNull();
+      expect(res.body.subPhaseId).toBeNull();
+    });
+
+    it("persists a phase-only payment", async () => {
+      const { project, phase } = await createProjectTree(entrepreneur.id);
+      const res = await request(app)
+        .post(`/api/projects/${project.id}/financials`)
+        .set("Authorization", authHeader(admin))
+        .send({ amountPaid: "100", phaseId: String(phase.id) });
+      expect(res.status).toBe(201);
+      expect(res.body.unitId).toBeNull();
+      expect(res.body.phaseId).toBe(phase.id);
+      expect(res.body.subPhaseId).toBeNull();
+    });
+
+    it("persists a sub-phase-only payment", async () => {
+      const { project, subPhase } = await createProjectTree(entrepreneur.id);
+      const res = await request(app)
+        .post(`/api/projects/${project.id}/financials`)
+        .set("Authorization", authHeader(admin))
+        .send({ amountPaid: "100", subPhaseId: String(subPhase.id) });
+      expect(res.status).toBe(201);
+      expect(res.body.unitId).toBeNull();
+      expect(res.body.phaseId).toBeNull();
+      expect(res.body.subPhaseId).toBe(subPhase.id);
+    });
+
+    it("persists a project-level payment when none of the three is set", async () => {
+      const { project } = await createProjectTree(entrepreneur.id);
+      const res = await request(app)
+        .post(`/api/projects/${project.id}/financials`)
+        .set("Authorization", authHeader(admin))
+        .send({ amountPaid: "100" });
+      expect(res.status).toBe(201);
+      expect(res.body.unitId).toBeNull();
+      expect(res.body.phaseId).toBeNull();
+      expect(res.body.subPhaseId).toBeNull();
+    });
+
+    it("rejects more than one of unitId/phaseId/subPhaseId being set", async () => {
+      const { project, unit, phase } = await createProjectTree(entrepreneur.id);
+      const res = await request(app)
+        .post(`/api/projects/${project.id}/financials`)
+        .set("Authorization", authHeader(admin))
+        .send({ amountPaid: "100", unitId: String(unit.id), phaseId: String(phase.id) });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("at most one of unitId, phaseId, or subPhaseId may be set");
+    });
+
+    it("rejects a malformed unitId", async () => {
+      const { project } = await createProjectTree(entrepreneur.id);
+      const res = await request(app)
+        .post(`/api/projects/${project.id}/financials`)
+        .set("Authorization", authHeader(admin))
+        .send({ amountPaid: "100", unitId: "abc" });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("unitId must be a number");
+    });
+
+    it("rejects a phaseId that belongs to a different project", async () => {
+      const { project: projectA } = await createProjectTree(entrepreneur.id);
+      const { phase: phaseB } = await createProjectTree(entrepreneur.id);
+      const res = await request(app)
+        .post(`/api/projects/${projectA.id}/financials`)
+        .set("Authorization", authHeader(admin))
+        .send({ amountPaid: "100", phaseId: String(phaseB.id) });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("phaseId does not belong to this project");
+    });
+
+    it("rejects a subPhaseId that belongs to a different project", async () => {
+      const { project: projectA } = await createProjectTree(entrepreneur.id);
+      const { subPhase: subPhaseB } = await createProjectTree(entrepreneur.id);
+      const res = await request(app)
+        .post(`/api/projects/${projectA.id}/financials`)
+        .set("Authorization", authHeader(admin))
+        .send({ amountPaid: "100", subPhaseId: String(subPhaseB.id) });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("subPhaseId does not belong to this project");
+    });
+
+    it("rejects a unitId that belongs to a different project", async () => {
+      const { project: projectA } = await createProjectTree(entrepreneur.id);
+      const { unit: unitB } = await createProjectTree(entrepreneur.id);
+      const res = await request(app)
+        .post(`/api/projects/${projectA.id}/financials`)
+        .set("Authorization", authHeader(admin))
+        .send({ amountPaid: "100", unitId: String(unitB.id) });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("unitId does not belong to this project");
+    });
+  });
 });

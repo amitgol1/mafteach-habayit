@@ -1,7 +1,14 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { api } from "../api/client";
-import type { PhaseStatus, ProjectStage, Project, Unit } from "../api/types";
-import { phaseStatusLabels, phaseStatuses, projectStageLabel, projectStageLabels, projectStages } from "../constants/labels";
+import type { PhaseStatus, ProjectStage, Project, ProjectType, Unit } from "../api/types";
+import {
+  phaseStatusLabels,
+  phaseStatuses,
+  projectStageLabel,
+  projectStageLabels,
+  projectStages,
+  unitNamePrefixByProjectType,
+} from "../constants/labels";
 import { StatusBadge } from "./StatusBadge";
 
 interface Props {
@@ -10,19 +17,28 @@ interface Props {
   selectedSubPhaseId: number | null;
   onSelectSubPhase: (id: number | null) => void;
   onChanged: () => void;
+  onUnitsGenerated: (units: Unit[]) => void;
 }
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   return (err as { response?: { data?: { error?: string } } }).response?.data?.error ?? fallback;
 }
 
-export function ProjectTree({ project, isManager, selectedSubPhaseId, onSelectSubPhase, onChanged }: Props) {
+export function ProjectTree({
+  project,
+  isManager,
+  selectedSubPhaseId,
+  onSelectSubPhase,
+  onChanged,
+  onUnitsGenerated,
+}: Props) {
   return (
     <div className="space-y-5" data-testid="project-tree">
       {project.units.map((unit) => (
         <UnitSection
           key={unit.id}
           unit={unit}
+          allUnits={project.units}
           isManager={isManager}
           selectedSubPhaseId={selectedSubPhaseId}
           onSelectSubPhase={onSelectSubPhase}
@@ -36,24 +52,31 @@ export function ProjectTree({ project, isManager, selectedSubPhaseId, onSelectSu
         </div>
       )}
       {isManager && project.units.length > 0 && <AddUnitForm projectId={project.id} onAdded={onChanged} />}
+      {isManager && project.projectType && (
+        <GenerateUnitsForm
+          projectId={project.id}
+          projectType={project.projectType}
+          currentUnitCount={project.units.length}
+          onGenerated={onUnitsGenerated}
+        />
+      )}
     </div>
   );
 }
 
 interface UnitSectionProps {
   unit: Unit;
+  allUnits: Unit[];
   isManager: boolean;
   selectedSubPhaseId: number | null;
   onSelectSubPhase: (id: number | null) => void;
   onChanged: () => void;
 }
 
-function UnitSection({ unit, isManager, selectedSubPhaseId, onSelectSubPhase, onChanged }: UnitSectionProps) {
-  const nextOrder = unit.phases.length + 1;
-
+function UnitSection({ unit, allUnits, isManager, selectedSubPhaseId, onSelectSubPhase, onChanged }: UnitSectionProps) {
   return (
     <div>
-      <h3 className="eyebrow mb-2 text-brass-deep">{unit.identifier}</h3>
+      <UnitIdentifierLabel unit={unit} isManager={isManager} onChanged={onChanged} />
       <div className="space-y-2">
         {[...unit.phases]
           .sort((a, b) => a.order - b.order)
@@ -124,10 +147,121 @@ function UnitSection({ unit, isManager, selectedSubPhaseId, onSelectSubPhase, on
       </div>
       {isManager && (
         <div className="mt-2">
-          <AddPhaseForm unitId={unit.id} nextOrder={nextOrder} onAdded={onChanged} />
+          <AddPhaseForm defaultUnitId={unit.id} units={allUnits} onAdded={onChanged} />
         </div>
       )}
     </div>
+  );
+}
+
+interface UnitIdentifierLabelProps {
+  unit: Unit;
+  isManager: boolean;
+  onChanged: () => void;
+}
+
+function UnitIdentifierLabel({ unit, isManager, onChanged }: UnitIdentifierLabelProps) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(unit.identifier);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!isManager) {
+    return <h3 className="eyebrow mb-2 text-brass-deep">{unit.identifier}</h3>;
+  }
+
+  async function handleDelete() {
+    if (
+      !window.confirm(
+        `למחוק את היחידה "${unit.identifier}"? פעולה זו תמחק גם את כל השלבים ותת-השלבים שלה. לא ניתן לבטל.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await api.delete(`/units/${unit.id}`);
+      onChanged();
+    } catch (err) {
+      setError(apiErrorMessage(err, "אירעה שגיאה במחיקת היחידה"));
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <h3 className="eyebrow text-brass-deep">{unit.identifier}</h3>
+        <button
+          type="button"
+          onClick={() => {
+            setValue(unit.identifier);
+            setError(null);
+            setEditing(true);
+          }}
+          className="text-xs text-ink-faint underline hover:text-ink-soft"
+          aria-label={`עריכת שם היחידה ${unit.identifier}`}
+        >
+          עריכה
+        </button>
+        <button
+          type="button"
+          onClick={handleDelete}
+          className="text-xs text-brick-deep underline hover:text-brick"
+          aria-label={`מחיקת היחידה ${unit.identifier}`}
+        >
+          מחיקה
+        </button>
+        {error && <p className="w-full text-sm text-brick-deep">{error}</p>}
+      </div>
+    );
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (trimmed === unit.identifier) {
+      setEditing(false);
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    try {
+      await api.patch(`/units/${unit.id}`, { identifier: trimmed });
+      setEditing(false);
+      onChanged();
+    } catch (err) {
+      setError(apiErrorMessage(err, "אירעה שגיאה בעדכון שם היחידה"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mb-2 flex flex-wrap items-center gap-2">
+      <input
+        type="text"
+        required
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        aria-label={`שם יחידה: ${unit.identifier}`}
+        className="form-field w-auto max-w-48 py-0.5 text-sm"
+      />
+      <button type="submit" disabled={saving} className="btn btn-ghost text-xs">
+        {saving ? "שומר..." : "שמירה"}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setEditing(false);
+          setError(null);
+        }}
+        className="btn btn-ghost text-xs"
+      >
+        ביטול
+      </button>
+      {error && <p className="w-full text-sm text-brick-deep">{error}</p>}
+    </form>
   );
 }
 
@@ -243,18 +377,104 @@ function AddUnitForm({ projectId, onAdded }: AddUnitFormProps) {
   );
 }
 
+interface GenerateUnitsFormProps {
+  projectId: number;
+  projectType: ProjectType;
+  currentUnitCount: number;
+  onGenerated: (units: Unit[]) => void;
+}
+
+function GenerateUnitsForm({ projectId, projectType, currentUnitCount, onGenerated }: GenerateUnitsFormProps) {
+  const [open, setOpen] = useState(false);
+  const [count, setCount] = useState("1");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const n = Number(count);
+    if (!n || n < 1) return;
+    setError(null);
+    setSaving(true);
+    try {
+      const prefix = unitNamePrefixByProjectType[projectType];
+      const identifiers = Array.from({ length: n }, (_, i) => `${prefix} ${currentUnitCount + i + 1}`);
+      // The bulk endpoint's response is `{ id, projectId, identifier, createdAt }`
+      // per unit (no `phases`), so fill that in for the client-side Unit shape.
+      const res = await api.post<Omit<Unit, "phases">[]>("/units/bulk", { projectId, identifiers });
+      onGenerated(res.data.map((unit) => ({ ...unit, phases: [] })));
+      setCount("1");
+      setOpen(false);
+    } catch (err) {
+      setError(apiErrorMessage(err, "אירעה שגיאה ביצירת היחידות"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="btn btn-ghost">
+        + יצירת יחידות אוטומטית
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="panel panel-edge flex flex-wrap items-end gap-2 p-3">
+      <div className="w-24">
+        <label className="form-label" htmlFor="generate-units-count">
+          מספר יחידות
+        </label>
+        <input
+          id="generate-units-count"
+          type="number"
+          min={1}
+          max={100}
+          required
+          value={count}
+          onChange={(e) => setCount(e.target.value)}
+          className="form-field numeric"
+        />
+      </div>
+      <button type="submit" disabled={saving} className="btn btn-primary">
+        {saving ? "יוצר..." : "יצירה"}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(false);
+          setError(null);
+        }}
+        className="btn btn-ghost"
+      >
+        ביטול
+      </button>
+      {error && <p className="w-full text-sm text-brick-deep">{error}</p>}
+    </form>
+  );
+}
+
 interface AddPhaseFormProps {
-  unitId: number;
-  nextOrder: number;
+  defaultUnitId: number;
+  units: Unit[];
   onAdded: () => void;
 }
 
-function AddPhaseForm({ unitId, nextOrder, onAdded }: AddPhaseFormProps) {
+function AddPhaseForm({ defaultUnitId, units, onAdded }: AddPhaseFormProps) {
   const [open, setOpen] = useState(false);
+  const [unitId, setUnitId] = useState(defaultUnitId);
   const [name, setName] = useState<ProjectStage | "">("");
-  const [order, setOrder] = useState(String(nextOrder));
+  const nextOrderForUnit = (id: number) => (units.find((u) => u.id === id)?.phases.length ?? 0) + 1;
+  const [order, setOrder] = useState(String(nextOrderForUnit(defaultUnitId)));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function handleUnitChange(e: ChangeEvent<HTMLSelectElement>) {
+    const id = Number(e.target.value);
+    setUnitId(id);
+    setOrder(String(nextOrderForUnit(id)));
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -264,7 +484,7 @@ function AddPhaseForm({ unitId, nextOrder, onAdded }: AddPhaseFormProps) {
     try {
       await api.post("/phases", { unitId, name, order: Number(order) });
       setName("");
-      setOrder(String(nextOrder + 1));
+      setOrder(String(nextOrderForUnit(unitId) + 1));
       setOpen(false);
       onAdded();
     } catch (err) {
@@ -284,12 +504,30 @@ function AddPhaseForm({ unitId, nextOrder, onAdded }: AddPhaseFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="panel panel-edge flex flex-wrap items-end gap-2 p-3">
+      <div className="min-w-32 flex-1">
+        <label className="form-label" htmlFor={`new-phase-unit-${defaultUnitId}`}>
+          יחידה
+        </label>
+        <select
+          id={`new-phase-unit-${defaultUnitId}`}
+          required
+          value={unitId}
+          onChange={handleUnitChange}
+          className="form-field"
+        >
+          {units.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.identifier}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="min-w-40 flex-1">
-        <label className="form-label" htmlFor={`new-phase-name-${unitId}`}>
+        <label className="form-label" htmlFor={`new-phase-name-${defaultUnitId}`}>
           שלב
         </label>
         <select
-          id={`new-phase-name-${unitId}`}
+          id={`new-phase-name-${defaultUnitId}`}
           required
           value={name}
           onChange={(e) => setName(e.target.value as ProjectStage | "")}
@@ -304,11 +542,11 @@ function AddPhaseForm({ unitId, nextOrder, onAdded }: AddPhaseFormProps) {
         </select>
       </div>
       <div className="w-20">
-        <label className="form-label" htmlFor={`new-phase-order-${unitId}`}>
+        <label className="form-label" htmlFor={`new-phase-order-${defaultUnitId}`}>
           סדר
         </label>
         <input
-          id={`new-phase-order-${unitId}`}
+          id={`new-phase-order-${defaultUnitId}`}
           type="number"
           required
           value={order}

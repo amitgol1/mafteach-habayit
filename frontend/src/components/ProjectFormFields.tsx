@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../api/client";
-import type { ProjectStage, Trade, User } from "../api/types";
-import { projectStages, projectStageLabels, tradeLabels, trades } from "../constants/labels";
+import type { ProjectStage, ProjectType, Trade, User } from "../api/types";
+import { projectStages, projectStageLabels, projectTypeLabels, projectTypes, tradeLabels, trades } from "../constants/labels";
 
 export interface ProjectFormPayload {
   name: string;
@@ -9,6 +9,7 @@ export interface ProjectFormPayload {
   owners?: string;
   totalBudget?: number;
   currentStage?: ProjectStage;
+  projectType?: ProjectType;
   participants?: { trade: Trade; userId: number }[];
   entrepreneurId?: number;
 }
@@ -19,6 +20,7 @@ export interface ProjectFormInitialValues {
   owners?: string | null;
   totalBudget?: number | null;
   currentStage?: ProjectStage | null;
+  projectType?: ProjectType | null;
   participants?: { trade: Trade; userId: number }[];
 }
 
@@ -54,6 +56,7 @@ export function ProjectFormFields({
     initialValues?.totalBudget != null ? String(initialValues.totalBudget) : ""
   );
   const [currentStage, setCurrentStage] = useState<ProjectStage | "">(initialValues?.currentStage ?? "");
+  const [projectType, setProjectType] = useState<ProjectType | "">(initialValues?.projectType ?? "");
   const [entrepreneurId, setEntrepreneurId] = useState<number | "">("");
   const [entrepreneurs, setEntrepreneurs] = useState<User[]>([]);
   const [loadingEntrepreneurs, setLoadingEntrepreneurs] = useState(entrepreneurPicker);
@@ -126,6 +129,7 @@ export function ProjectFormFields({
         owners: owners.trim() || undefined,
         totalBudget: totalBudget ? Number(totalBudget) : undefined,
         currentStage: currentStage || undefined,
+        projectType: projectType || undefined,
         participants: participants.length > 0 || alwaysIncludeParticipants ? participants : undefined,
         entrepreneurId: entrepreneurPicker ? Number(entrepreneurId) : undefined,
       });
@@ -136,6 +140,7 @@ export function ProjectFormFields({
         setOwners("");
         setTotalBudget("");
         setCurrentStage("");
+        setProjectType("");
         setSelectedUserByTrade({});
         setEntrepreneurId("");
       }
@@ -243,6 +248,24 @@ export function ProjectFormFields({
             {projectStages.map((stage) => (
               <option key={stage} value={stage}>
                 {projectStageLabels[stage]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="form-label" htmlFor="projectType">
+            סוג פרויקט
+          </label>
+          <select
+            id="projectType"
+            value={projectType}
+            onChange={(e) => setProjectType(e.target.value as ProjectType | "")}
+            className="form-field"
+          >
+            <option value="">בחרו סוג פרויקט</option>
+            {projectTypes.map((type) => (
+              <option key={type} value={type}>
+                {projectTypeLabels[type]}
               </option>
             ))}
           </select>

@@ -1,4 +1,4 @@
-import type { PhaseStatus, ProjectStage, Role, Trade } from "../api/types";
+import type { PhaseStatus, ProjectStage, ProjectType, Role, Trade } from "../api/types";
 
 export const tradeLabels: Record<Trade, string> = {
   ARCHITECT: "אדריכל",
@@ -36,10 +36,21 @@ export const phaseStatusLabels: Record<PhaseStatus, string> = {
   BLOCKED: "מעוכב",
 };
 
+export const projectTypeLabels: Record<ProjectType, string> = {
+  RESIDENTIAL_BUILDING: "בניין מגורים",
+  PRIVATE_HOUSES: "בתים פרטיים",
+};
+
+export const unitNamePrefixByProjectType: Record<ProjectType, string> = {
+  RESIDENTIAL_BUILDING: "דירה",
+  PRIVATE_HOUSES: "בית",
+};
+
 export const trades = Object.keys(tradeLabels) as Trade[];
 export const projectStages = Object.keys(projectStageLabels) as ProjectStage[];
 export const roles = Object.keys(roleLabels) as Role[];
 export const phaseStatuses = Object.keys(phaseStatusLabels) as PhaseStatus[];
+export const projectTypes = Object.keys(projectTypeLabels) as ProjectType[];
 
 /**
  * Enum values arrive from the API as English strings that are wider than our
@@ -59,4 +70,9 @@ export function roleLabel(role: string | null | undefined): string | null {
 export function projectStageLabel(stage: string | null | undefined): string | null {
   if (!stage) return null;
   return projectStageLabels[stage as ProjectStage] ?? stage;
+}
+
+export function projectTypeLabel(type: string | null | undefined): string | null {
+  if (!type) return null;
+  return projectTypeLabels[type as ProjectType] ?? type;
 }

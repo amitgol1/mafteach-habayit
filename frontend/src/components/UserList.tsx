@@ -35,6 +35,23 @@ export function UserList({ refreshSignal }: UserListProps) {
     }
   }
 
+  async function handleResetTotp(user: User) {
+    if (
+      !window.confirm(`לאפס את האימות הדו-שלבי של "${user.name}"? המשתמש יצטרך להגדיר אותו מחדש בכניסה הבאה.`)
+    )
+      return;
+    setError(null);
+    try {
+      await api.post(`/users/${user.id}/reset-totp`);
+      reload();
+    } catch (err) {
+      const message =
+        (err as { response?: { data?: { error?: string } } }).response?.data?.error ??
+        "אירעה שגיאה באיפוס האימות הדו-שלבי";
+      setError(message);
+    }
+  }
+
   return (
     <div className="mt-8">
       <h2 className="mb-3 font-display text-lg text-ink">משתמשים קיימים</h2>
@@ -73,9 +90,12 @@ export function UserList({ refreshSignal }: UserListProps) {
                       {user.trade && ` · ${tradeLabel(user.trade)}`}
                     </p>
                   </div>
-                  <div className="flex shrink-0 gap-2">
+                  <div className="flex shrink-0 flex-wrap gap-2">
                     <button type="button" onClick={() => setEditingId(user.id)} className="btn btn-ghost">
                       ערוך
+                    </button>
+                    <button type="button" onClick={() => handleResetTotp(user)} className="btn btn-ghost">
+                      איפוס אימות דו-שלבי
                     </button>
                     <button
                       type="button"

@@ -1,11 +1,10 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { api } from "../api/client";
 import type { User } from "../api/types";
 
 interface AuthState {
   user: User | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  completeLogin: (token: string, user: User) => void;
   logout: () => void;
 }
 
@@ -18,12 +17,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return raw ? (JSON.parse(raw) as User) : null;
   });
 
-  async function login(email: string, password: string) {
-    const { data } = await api.post<{ token: string; user: User }>("/auth/login", { email, password });
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    setToken(data.token);
-    setUser(data.user);
+  function completeLogin(token: string, user: User) {
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(user));
+    setToken(token);
+    setUser(user);
   }
 
   function logout() {
@@ -33,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
-  return <AuthContext.Provider value={{ user, token, login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, token, completeLogin, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthState {

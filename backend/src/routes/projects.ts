@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { PhaseStatus, ProjectStage, Role, Trade } from "../constants";
+import { PhaseStatus, ProjectStage, ProjectType, Role, Trade } from "../constants";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { AuthedRequest, requireAuth } from "../middleware/auth";
 import { prisma } from "../prisma";
@@ -11,6 +11,7 @@ projectsRouter.use(requireAuth);
 
 const validTrades = Object.values(Trade) as string[];
 const validStages = Object.values(ProjectStage) as string[];
+const validProjectTypes = Object.values(ProjectType) as string[];
 
 const participantInclude = {
   participants: { include: { user: { select: { id: true, name: true, trade: true } } } },
@@ -102,23 +103,37 @@ projectsRouter.post(
   "/",
   requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { name, location, overallStatus, owners, totalBudget, currentStage, participants, entrepreneurId } =
-      req.body as {
-        name?: string;
-        location?: string;
-        overallStatus?: string;
-        owners?: string;
-        totalBudget?: number;
-        currentStage?: string;
-        participants?: { trade?: string; userId?: number }[];
-        entrepreneurId?: number;
-      };
+    const {
+      name,
+      location,
+      overallStatus,
+      owners,
+      totalBudget,
+      currentStage,
+      projectType,
+      participants,
+      entrepreneurId,
+    } = req.body as {
+      name?: string;
+      location?: string;
+      overallStatus?: string;
+      owners?: string;
+      totalBudget?: number;
+      currentStage?: string;
+      projectType?: string;
+      participants?: { trade?: string; userId?: number }[];
+      entrepreneurId?: number;
+    };
     if (!name || !location) {
       res.status(400).json({ error: "name and location are required" });
       return;
     }
     if (currentStage && !validStages.includes(currentStage)) {
       res.status(400).json({ error: `currentStage must be one of ${validStages.join(", ")}` });
+      return;
+    }
+    if (projectType && !validProjectTypes.includes(projectType)) {
+      res.status(400).json({ error: `projectType must be one of ${validProjectTypes.join(", ")}` });
       return;
     }
 
@@ -161,6 +176,7 @@ projectsRouter.post(
         owners: owners ?? null,
         totalBudget: totalBudget ?? null,
         currentStage: currentStage ?? null,
+        projectType: projectType ?? null,
         entrepreneurId: resolvedEntrepreneurId,
         participants: { create: participantsData },
       },
@@ -185,17 +201,23 @@ projectsRouter.patch(
       return;
     }
 
-    const { name, location, overallStatus, owners, totalBudget, currentStage, participants } = req.body as {
-      name?: string;
-      location?: string;
-      overallStatus?: string;
-      owners?: string;
-      totalBudget?: number;
-      currentStage?: string;
-      participants?: { trade?: string; userId?: number }[];
-    };
+    const { name, location, overallStatus, owners, totalBudget, currentStage, projectType, participants } =
+      req.body as {
+        name?: string;
+        location?: string;
+        overallStatus?: string;
+        owners?: string;
+        totalBudget?: number;
+        currentStage?: string;
+        projectType?: string;
+        participants?: { trade?: string; userId?: number }[];
+      };
     if (currentStage && !validStages.includes(currentStage)) {
       res.status(400).json({ error: `currentStage must be one of ${validStages.join(", ")}` });
+      return;
+    }
+    if (projectType && !validProjectTypes.includes(projectType)) {
+      res.status(400).json({ error: `projectType must be one of ${validProjectTypes.join(", ")}` });
       return;
     }
 
@@ -220,7 +242,7 @@ projectsRouter.patch(
       }
       return tx.project.update({
         where: { id },
-        data: { name, location, overallStatus, owners, totalBudget, currentStage },
+        data: { name, location, overallStatus, owners, totalBudget, currentStage, projectType },
         include: participantInclude,
       });
     });

@@ -44,3 +44,9 @@ export const ProjectStage = {
   FORM_4: "FORM_4",
 } as const;
 export type ProjectStage = (typeof ProjectStage)[keyof typeof ProjectStage];
+
+export const ProjectType = {
+  RESIDENTIAL_BUILDING: "RESIDENTIAL_BUILDING",
+  PRIVATE_HOUSES: "PRIVATE_HOUSES",
+} as const;
+export type ProjectType = (typeof ProjectType)[keyof typeof ProjectType];

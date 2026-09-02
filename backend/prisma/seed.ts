@@ -1,8 +1,29 @@
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 import { Role } from "../src/constants";
+import { encryptSecret } from "../src/utils/totpCrypto";
 
 const prisma = new PrismaClient();
+
+// Only for the isolated e2e database — mirrors the DATABASE_URL safety check
+// in backend/tests/setup.ts. Never runs against dev.db: `npm run seed`
+// (local dev, docs/RUNNING.md) uses DATABASE_URL="file:./dev.db", which does
+// not match "e2e.db", so real accounts always fall through to the normal
+// null/null "needs setup" state.
+const E2E_TOTP_SECRET = "JBSWY3DPEHPK3PXP"; // committed, well-known — e2e-only, see docs/specs/totp-2fa.md
+
+async function preConfirmTotpForE2e() {
+  if (!process.env.DATABASE_URL?.includes("e2e.db")) return;
+
+  await prisma.user.update({
+    where: { email: "admin@mafteach-habayit.local" },
+    data: { totpSecret: encryptSecret(E2E_TOTP_SECRET), totpConfirmedAt: new Date() },
+  });
+  await prisma.user.update({
+    where: { email: "yakov@y.com" },
+    data: { totpSecret: encryptSecret(E2E_TOTP_SECRET), totpConfirmedAt: new Date() },
+  });
+}
 
 async function seedSuperAdmin() {
   const email = "admin@mafteach-habayit.local";
@@ -65,6 +86,7 @@ async function seedYakovAndBackfillTenancy(adminId: number) {
 async function main() {
   const admin = await seedSuperAdmin();
   await seedYakovAndBackfillTenancy(admin.id);
+  await preConfirmTotpForE2e();
 }
 
 main()

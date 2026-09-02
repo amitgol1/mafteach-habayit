@@ -27,7 +27,7 @@ test("an entrepreneur only sees their own projects and users, not another entrep
     trade: "ELECTRICIAN",
   });
 
-  await loginViaUi(page, entrepreneurA.email, "password123");
+  await loginViaUi(page, entrepreneurA.email, "password123", entrepreneurA.totpSecret);
 
   await expect(page.getByRole("heading", { name: projectAName, level: 2 })).toBeVisible();
   await expect(page.getByRole("heading", { name: projectBName, level: 2 })).not.toBeVisible();
@@ -44,7 +44,7 @@ test("hitting the 5-project quota shows the API's Hebrew error in the creation f
     await apiCreateProject(entrepreneur.token, { name: `פרויקט מכסה ${i} ${Date.now()}`, location: "כפר סבא" });
   }
 
-  await loginViaUi(page, entrepreneur.email, "password123");
+  await loginViaUi(page, entrepreneur.email, "password123", entrepreneur.totpSecret);
   await page.getByRole("link", { name: "ניהול", exact: true }).click();
   await expect(page.getByRole("heading", { name: "יצירת פרויקט חדש" })).toBeVisible();
 

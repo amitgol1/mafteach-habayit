@@ -16,16 +16,21 @@ datasource db {
 //        | "PLUMBER" | "COMMUNICATIONS_TECHNICIAN" | "MAIN_CONTRACTOR"
 // ProjectStage: "SKELETON" | "ELECTRICITY" | "PLUMBING" | "PLASTER" | "FLOORING"
 //               | "ALUMINUM" | "FENCES"
+// ProjectType: "RESIDENTIAL_BUILDING" | "PRIVATE_HOUSES" — null means not yet set
+//              (legacy/retrofit project); drives default Unit-name generation only,
+//              see docs/specs/project-type-and-units.md
 
 model User {
-  id           Int      @id @default(autoincrement())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         String
-  trade        String? // e.g. "ELECTRICIAN", null for SUPER_ADMIN/ENTREPRENEUR — see Trade in src/constants.ts
-  createdAt    DateTime @default(now())
-  createdById  Int? // who created this user (SUPER_ADMIN creates ENTREPRENEURs, ENTREPRENEUR creates COLLABORATORs); null for bootstrap/seed-created users
+  id              Int       @id @default(autoincrement())
+  name            String
+  email           String    @unique
+  passwordHash    String
+  role            String
+  trade           String? // e.g. "ELECTRICIAN", null for SUPER_ADMIN/ENTREPRENEUR — see Trade in src/constants.ts
+  totpSecret      String? // base32 TOTP secret, AES-256-GCM encrypted at rest (iv:authTag:ciphertext, hex) with TOTP_ENCRYPTION_KEY — see docs/specs/totp-2fa.md; null = setup never started; non-null + totpConfirmedAt null = setup started but abandoned
+  totpConfirmedAt DateTime? // set once POST /auth/totp/confirm succeeds; THIS (not totpSecret) is the "2FA fully configured" signal used to route login — see docs/specs/totp-2fa.md
+  createdAt       DateTime  @default(now())
+  createdById     Int? // who created this user (SUPER_ADMIN creates ENTREPRENEURs, ENTREPRENEUR creates COLLABORATORs); null for bootstrap/seed-created users
 
   createdBy    User?  @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdUsers User[] @relation("UserCreatedBy")
@@ -46,14 +51,15 @@ model Project {
   owners         String? // free text, project owners/clients
   totalBudget    Float?
   currentStage   String? // ProjectStage vocabulary — distinct from overallStatus, see src/constants.ts
+  projectType    String? // ProjectType vocabulary, see src/constants.ts; null = not set (legacy/retrofit projects keep today's free-text Unit flow)
   createdAt      DateTime @default(now())
   entrepreneurId Int // owning ENTREPRENEUR; required — every project has exactly one paying-client owner, see team-lead contract
 
-  entrepreneur      User                 @relation(fields: [entrepreneurId], references: [id], onDelete: Restrict)
-  units             Unit[]
-  financialRecords  FinancialRecord[]
-  participants      ProjectParticipant[]
-  updates           Update[]
+  entrepreneur     User                 @relation(fields: [entrepreneurId], references: [id], onDelete: Restrict)
+  units            Unit[]
+  financialRecords FinancialRecord[]
+  participants     ProjectParticipant[]
+  updates          Update[]
 
   @@index([entrepreneurId])
 }
@@ -64,14 +70,15 @@ model Unit {
   identifier String // e.g. "House A"
   createdAt  DateTime @default(now())
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  phases  Phase[]
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phases           Phase[]
+  financialRecords FinancialRecord[]
 
   @@index([projectId])
 }
 
 model Phase {
-  id        Int         @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   unitId    Int
   name      String // e.g. "Skeleton", "Plumbing", "Electricity"
   status    String   @default("NOT_STARTED")
@@ -86,15 +93,16 @@ model Phase {
 }
 
 model SubPhase {
-  id        Int         @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   phaseId   Int
   name      String // e.g. "Underground", "Ground Floor", "Mamad"
   status    String   @default("NOT_STARTED")
   createdAt DateTime @default(now())
 
-  phase       Phase             @relation(fields: [phaseId], references: [id], onDelete: Cascade)
-  assignments PhaseAssignment[]
-  updates     Update[]
+  phase            Phase             @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  assignments      PhaseAssignment[]
+  updates          Update[]
+  financialRecords FinancialRecord[]
 
   @@index([phaseId])
 }
@@ -148,14 +156,20 @@ model Update {
 model FinancialRecord {
   id              Int      @id @default(autoincrement())
   projectId       Int
+  unitId          Int? // at most one of unitId/phaseId/subPhaseId is set — enforced by route validation, not a DB constraint (see docs/specs/payment-links.md); none of the three = project-level/general payment
   phaseId         Int?
+  subPhaseId      Int?
   amountPaid      Float    @default(0)
   receiptMediaUrl String? // local path under /uploads
   timestamp       DateTime @default(now())
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  phase   Phase?  @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  unit     Unit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  phase    Phase?    @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  subPhase SubPhase? @relation(fields: [subPhaseId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
+  @@index([unitId])
   @@index([phaseId])
+  @@index([subPhaseId])
 }

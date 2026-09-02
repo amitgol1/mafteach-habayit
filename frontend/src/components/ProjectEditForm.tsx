@@ -23,6 +23,7 @@ export function ProjectEditForm({ project, onSaved }: ProjectEditFormProps) {
           owners: project.owners,
           totalBudget: project.totalBudget,
           currentStage: project.currentStage,
+          projectType: project.projectType,
           participants: project.participants?.map((p) => ({ trade: p.trade, userId: p.userId })),
         }}
         submitLabel="שמור שינויים"

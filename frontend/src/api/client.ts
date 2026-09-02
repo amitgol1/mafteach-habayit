@@ -11,7 +11,13 @@ api.interceptors.request.use((config) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const refreshedToken = response.headers["x-refreshed-token"];
+    if (refreshedToken) {
+      localStorage.setItem("token", refreshedToken);
+    }
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401 && window.location.pathname !== "/login") {
       localStorage.removeItem("token");
