@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { eq, inArray, and, sql } from "drizzle-orm";
-import { PhaseStatus, ProjectStage, Role, Trade } from "../constants";
+import { ProjectStage, Role, Trade } from "../constants";
 import { requireAuth } from "../middleware-worker/auth";
 import { createDb, type Db } from "../db/client";
 import { projectParticipants, projects, users } from "../db/schema";
+import { computeOverallStatus } from "../utils/overallStatus";
 import {
   assertProjectOwnership,
   canAccessProject,
@@ -84,7 +85,7 @@ projectsRouter.get("/", async (c) => {
       },
     },
   });
-  return c.json(rows);
+  return c.json(rows.map((p) => ({ ...p, overallStatus: computeOverallStatus(p.units) })));
 });
 
 projectsRouter.get("/:id", async (c) => {
@@ -114,22 +115,20 @@ projectsRouter.get("/:id", async (c) => {
     return c.json({ error: "Not assigned to this project" }, 403);
   }
 
-  return c.json(project);
+  return c.json({ ...project, overallStatus: computeOverallStatus(project.units) });
 });
 
 projectsRouter.post("/", requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR), async (c) => {
   const actor = c.get("user");
-  const { name, location, overallStatus, owners, totalBudget, currentStage, participants, entrepreneurId } =
-    await c.req.json<{
-      name?: string;
-      location?: string;
-      overallStatus?: string;
-      owners?: string;
-      totalBudget?: number;
-      currentStage?: string;
-      participants?: { trade?: string; userId?: number }[];
-      entrepreneurId?: number;
-    }>();
+  const { name, location, owners, totalBudget, currentStage, participants, entrepreneurId } = await c.req.json<{
+    name?: string;
+    location?: string;
+    owners?: string;
+    totalBudget?: number;
+    currentStage?: string;
+    participants?: { trade?: string; userId?: number }[];
+    entrepreneurId?: number;
+  }>();
   if (!name || !location) {
     return c.json({ error: "name and location are required" }, 400);
   }
@@ -174,7 +173,6 @@ projectsRouter.post("/", requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR), async
     .values({
       name,
       location,
-      overallStatus: (overallStatus ?? PhaseStatus.NOT_STARTED) as PhaseStatus,
       owners: owners ?? null,
       totalBudget: totalBudget ?? null,
       currentStage: (currentStage ?? null) as ProjectStage | null,
@@ -190,7 +188,8 @@ projectsRouter.post("/", requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR), async
     where: eq(projects.id, created.id),
     ...projectWithParticipants,
   });
-  return c.json(project, 201);
+  // Newly created project has no units yet — rollup is trivially NOT_STARTED.
+  return c.json({ ...project, overallStatus: computeOverallStatus([]) }, 201);
 });
 
 projectsRouter.patch("/:id", requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR), async (c) => {
@@ -206,10 +205,9 @@ projectsRouter.patch("/:id", requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR), a
     return c.json({ error: "Not authorized for this project" }, 403);
   }
 
-  const { name, location, overallStatus, owners, totalBudget, currentStage, participants } = await c.req.json<{
+  const { name, location, owners, totalBudget, currentStage, participants } = await c.req.json<{
     name?: string;
     location?: string;
-    overallStatus?: string;
     owners?: string;
     totalBudget?: number;
     currentStage?: string;
@@ -258,7 +256,6 @@ projectsRouter.patch("/:id", requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR), a
       id: sql`${projects.id}`,
       name,
       location,
-      overallStatus: overallStatus as PhaseStatus | undefined,
       owners,
       totalBudget,
       currentStage: currentStage as ProjectStage | undefined,
@@ -267,8 +264,12 @@ projectsRouter.patch("/:id", requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR), a
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await db.batch([...participantStatements, updateStatement] as any);
 
-  const updated = await db.query.projects.findFirst({ where: eq(projects.id, id), ...projectWithParticipants });
-  return c.json(updated);
+  const updated = await db.query.projects.findFirst({
+    where: eq(projects.id, id),
+    with: { ...projectWithParticipants.with, units: { with: { phases: true } } },
+  });
+  const { units, ...updatedFields } = updated!;
+  return c.json({ ...updatedFields, overallStatus: computeOverallStatus(units) });
 });
 
 projectsRouter.delete("/:id", requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR), async (c) => {

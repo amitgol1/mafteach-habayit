@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { PhaseStatus, ProjectStage, ProjectType, Role, Trade } from "../constants";
+import { ProjectStage, ProjectType, Role, Trade } from "../constants";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { AuthedRequest, requireAuth } from "../middleware/auth";
 import { prisma } from "../prisma";
+import { computeOverallStatus } from "../utils/overallStatus";
 import { assertProjectOwnership, canAccessProject, projectTenantFilter, requireRole } from "../utils/tenantScope";
 
 export const projectsRouter = Router();
@@ -70,7 +71,7 @@ projectsRouter.get(
       orderBy: { createdAt: "desc" },
       include: { units: { include: { phases: { orderBy: { order: "asc" } } } } },
     });
-    res.json(projects);
+    res.json(projects.map((p) => ({ ...p, overallStatus: computeOverallStatus(p.units) })));
   })
 );
 
@@ -95,7 +96,7 @@ projectsRouter.get(
       return;
     }
 
-    res.json(project);
+    res.json({ ...project, overallStatus: computeOverallStatus(project.units) });
   })
 );
 
@@ -103,27 +104,17 @@ projectsRouter.post(
   "/",
   requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const {
-      name,
-      location,
-      overallStatus,
-      owners,
-      totalBudget,
-      currentStage,
-      projectType,
-      participants,
-      entrepreneurId,
-    } = req.body as {
-      name?: string;
-      location?: string;
-      overallStatus?: string;
-      owners?: string;
-      totalBudget?: number;
-      currentStage?: string;
-      projectType?: string;
-      participants?: { trade?: string; userId?: number }[];
-      entrepreneurId?: number;
-    };
+    const { name, location, owners, totalBudget, currentStage, projectType, participants, entrepreneurId } =
+      req.body as {
+        name?: string;
+        location?: string;
+        owners?: string;
+        totalBudget?: number;
+        currentStage?: string;
+        projectType?: string;
+        participants?: { trade?: string; userId?: number }[];
+        entrepreneurId?: number;
+      };
     if (!name || !location) {
       res.status(400).json({ error: "name and location are required" });
       return;
@@ -172,7 +163,6 @@ projectsRouter.post(
       data: {
         name,
         location,
-        overallStatus: overallStatus ?? PhaseStatus.NOT_STARTED,
         owners: owners ?? null,
         totalBudget: totalBudget ?? null,
         currentStage: currentStage ?? null,
@@ -182,7 +172,8 @@ projectsRouter.post(
       },
       include: participantInclude,
     });
-    res.status(201).json(project);
+    // Newly created project has no units yet — rollup is trivially NOT_STARTED.
+    res.status(201).json({ ...project, overallStatus: computeOverallStatus([]) });
   })
 );
 
@@ -201,17 +192,15 @@ projectsRouter.patch(
       return;
     }
 
-    const { name, location, overallStatus, owners, totalBudget, currentStage, projectType, participants } =
-      req.body as {
-        name?: string;
-        location?: string;
-        overallStatus?: string;
-        owners?: string;
-        totalBudget?: number;
-        currentStage?: string;
-        projectType?: string;
-        participants?: { trade?: string; userId?: number }[];
-      };
+    const { name, location, owners, totalBudget, currentStage, projectType, participants } = req.body as {
+      name?: string;
+      location?: string;
+      owners?: string;
+      totalBudget?: number;
+      currentStage?: string;
+      projectType?: string;
+      participants?: { trade?: string; userId?: number }[];
+    };
     if (currentStage && !validStages.includes(currentStage)) {
       res.status(400).json({ error: `currentStage must be one of ${validStages.join(", ")}` });
       return;
@@ -242,11 +231,12 @@ projectsRouter.patch(
       }
       return tx.project.update({
         where: { id },
-        data: { name, location, overallStatus, owners, totalBudget, currentStage, projectType },
-        include: participantInclude,
+        data: { name, location, owners, totalBudget, currentStage, projectType },
+        include: { ...participantInclude, units: { include: { phases: true } } },
       });
     });
-    res.json(updated);
+    const { units, ...updatedFields } = updated;
+    res.json({ ...updatedFields, overallStatus: computeOverallStatus(units) });
   })
 );
 

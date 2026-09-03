@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { app } from "../src/app";
-import { Role, Trade } from "../src/constants";
+import { PhaseStatus, Role, Trade } from "../src/constants";
 import { prisma } from "../src/prisma";
 import { authHeader, createUser, resetDb } from "./helpers";
 
@@ -355,6 +355,95 @@ describe("/api/projects", () => {
       expect(patchRes.body.participants).toHaveLength(1);
       expect(patchRes.body.participants[0].trade).toBe(Trade.PLUMBER);
       expect(patchRes.body.participants[0].userId).toBe(userB.id);
+    });
+  });
+
+  describe("overallStatus — computed read-time rollup from Phase.status", () => {
+    async function buildProjectWithUnits(unitPhaseStatuses: string[][], name = "Rollup Project") {
+      const project = await prisma.project.create({ data: { name, location: "L", entrepreneurId: entrepreneur.id } });
+      for (const [unitIndex, statuses] of unitPhaseStatuses.entries()) {
+        const unit = await prisma.unit.create({ data: { projectId: project.id, identifier: `Unit ${unitIndex}` } });
+        for (const [phaseIndex, status] of statuses.entries()) {
+          await prisma.phase.create({
+            data: { unitId: unit.id, name: `Phase ${phaseIndex}`, order: phaseIndex, status },
+          });
+        }
+      }
+      return project;
+    }
+
+    it("BLOCKED anywhere wins over IN_PROGRESS/COMPLETED/NOT_STARTED elsewhere", async () => {
+      const project = await buildProjectWithUnits([
+        [PhaseStatus.IN_PROGRESS, PhaseStatus.COMPLETED],
+        [PhaseStatus.BLOCKED, PhaseStatus.NOT_STARTED],
+      ]);
+
+      const detailRes = await request(app).get(`/api/projects/${project.id}`).set("Authorization", authHeader(admin));
+      expect(detailRes.body.overallStatus).toBe(PhaseStatus.BLOCKED);
+
+      const listRes = await request(app).get("/api/projects").set("Authorization", authHeader(admin));
+      expect(listRes.body.find((p: { id: number }) => p.id === project.id).overallStatus).toBe(PhaseStatus.BLOCKED);
+    });
+
+    it("IN_PROGRESS anywhere (no BLOCKED) wins over COMPLETED/NOT_STARTED elsewhere", async () => {
+      const project = await buildProjectWithUnits([
+        [PhaseStatus.COMPLETED, PhaseStatus.NOT_STARTED],
+        [PhaseStatus.IN_PROGRESS],
+      ]);
+
+      const res = await request(app).get(`/api/projects/${project.id}`).set("Authorization", authHeader(admin));
+      expect(res.body.overallStatus).toBe(PhaseStatus.IN_PROGRESS);
+    });
+
+    it("all phases COMPLETED rolls up to COMPLETED", async () => {
+      const project = await buildProjectWithUnits([[PhaseStatus.COMPLETED], [PhaseStatus.COMPLETED]]);
+
+      const res = await request(app).get(`/api/projects/${project.id}`).set("Authorization", authHeader(admin));
+      expect(res.body.overallStatus).toBe(PhaseStatus.COMPLETED);
+    });
+
+    it("a freshly created project with zero phases rolls up to NOT_STARTED", async () => {
+      const created = await request(app)
+        .post("/api/projects")
+        .set("Authorization", authHeader(admin))
+        .send({ name: "No Phases Yet", location: "L", entrepreneurId: entrepreneur.id });
+
+      expect(created.status).toBe(201);
+      expect(created.body.overallStatus).toBe(PhaseStatus.NOT_STARTED);
+    });
+
+    it("a mix of COMPLETED and NOT_STARTED, with nothing IN_PROGRESS/BLOCKED, rolls up to NOT_STARTED", async () => {
+      const project = await buildProjectWithUnits([[PhaseStatus.COMPLETED, PhaseStatus.NOT_STARTED]]);
+
+      const res = await request(app).get(`/api/projects/${project.id}`).set("Authorization", authHeader(admin));
+      expect(res.body.overallStatus).toBe(PhaseStatus.NOT_STARTED);
+    });
+
+    it("ignores a client-supplied overallStatus on POST — response reflects the computed value", async () => {
+      const res = await request(app)
+        .post("/api/projects")
+        .set("Authorization", authHeader(admin))
+        .send({
+          name: "Client Supplied",
+          location: "L",
+          entrepreneurId: entrepreneur.id,
+          overallStatus: PhaseStatus.COMPLETED,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.overallStatus).toBe(PhaseStatus.NOT_STARTED);
+    });
+
+    it("ignores a client-supplied overallStatus on PATCH — response reflects the computed value", async () => {
+      const project = await buildProjectWithUnits([[PhaseStatus.IN_PROGRESS]]);
+
+      const res = await request(app)
+        .patch(`/api/projects/${project.id}`)
+        .set("Authorization", authHeader(admin))
+        .send({ overallStatus: PhaseStatus.BLOCKED });
+
+      expect(res.status).toBe(200);
+      expect(res.body.overallStatus).toBe(PhaseStatus.IN_PROGRESS);
     });
   });
 });
