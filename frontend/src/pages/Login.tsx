@@ -241,6 +241,17 @@ function TotpSetupForm({ pendingToken, user, onComplete, onExpired }: TotpStepPr
         סרקו את קוד ה-QR באמצעות אפליקציית אימות (כגון Google Authenticator), ולאחר מכן הזינו את הקוד שהיא מציגה.
       </p>
 
+      <div className="mt-4 rounded-lg border border-limestone-deep bg-limestone/30 px-3 py-2 text-xs text-ink-soft">
+        <p className="font-medium text-ink">אין לכם אפליקציית אימות בטלפון?</p>
+        <p className="mt-1">
+          זו אפליקציה חינמית שמייצרת קוד אימות. פתחו את חנות האפליקציות בטלפון —{" "}
+          <span dir="ltr" className="font-medium">App Store</span> באייפון, או{" "}
+          <span dir="ltr" className="font-medium">Google Play</span> באנדרואיד — וחפשו{" "}
+          <span dir="ltr" className="font-medium">Google Authenticator</span>. התקינו, פתחו אותה, ואז חזרו לכאן וסרקו
+          את קוד ה-QR למטה.
+        </p>
+      </div>
+
       {!setupData && <p className="mt-6 text-sm text-ink-soft">טוען...</p>}
 
       {setupData && (

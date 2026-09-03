@@ -45,6 +45,35 @@ usersRouter.get(
   })
 );
 
+usersRouter.get(
+  "/tree",
+  requireRole(Role.SUPER_ADMIN),
+  asyncHandler(async (_req: AuthedRequest, res) => {
+    const entrepreneurs = await prisma.user.findMany({
+      where: { role: Role.ENTREPRENEUR },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        trade: true,
+        createdAt: true,
+        createdUsers: {
+          where: { role: Role.COLLABORATOR },
+          select: { id: true, name: true, email: true, role: true, trade: true, createdAt: true },
+          orderBy: { name: "asc" },
+        },
+      },
+      orderBy: { name: "asc" },
+    });
+    const tree = entrepreneurs.map(({ createdUsers, ...entrepreneur }) => ({
+      ...entrepreneur,
+      collaborators: createdUsers,
+    }));
+    res.json(tree);
+  })
+);
+
 usersRouter.post(
   "/",
   asyncHandler(async (req: AuthedRequest, res) => {

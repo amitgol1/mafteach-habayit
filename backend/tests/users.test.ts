@@ -270,6 +270,38 @@ describe("/api/users", () => {
     expect(deleteRes.status).toBe(403);
   });
 
+  it("returns the entrepreneur/collaborator tree for a SUPER_ADMIN, ordered by name", async () => {
+    const zoe = await createUser({ role: Role.ENTREPRENEUR, name: "Zoe", email: "zoe@test.local" });
+    await createUser({ role: Role.COLLABORATOR, trade: Trade.ELECTRICIAN, name: "Zed", email: "zed@test.local", createdById: entrepreneur.id });
+    await createUser({ role: Role.COLLABORATOR, trade: Trade.PLUMBER, name: "Amy", email: "amy-collab@test.local", createdById: entrepreneur.id });
+
+    const res = await request(app).get("/api/users/tree").set("Authorization", authHeader(admin));
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((e: { name: string }) => e.name)).toEqual([entrepreneur.name, zoe.name]);
+
+    const entrepreneurNode = res.body.find((e: { id: number }) => e.id === entrepreneur.id);
+    expect(entrepreneurNode.collaborators.map((c: { name: string }) => c.name)).toEqual(["Amy", "Zed"]);
+    expect(entrepreneurNode.collaborators[0]).toMatchObject({ name: "Amy", role: Role.COLLABORATOR, trade: Trade.PLUMBER });
+    expect(entrepreneurNode.passwordHash).toBeUndefined();
+
+    const zoeNode = res.body.find((e: { id: number }) => e.id === zoe.id);
+    expect(zoeNode.collaborators).toEqual([]);
+    expect(admin.id).not.toBe(entrepreneurNode.id);
+    expect(res.body.some((e: { id: number }) => e.id === admin.id)).toBe(false);
+  });
+
+  it("rejects an ENTREPRENEUR from GET /api/users/tree", async () => {
+    const res = await request(app).get("/api/users/tree").set("Authorization", authHeader(entrepreneur));
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("Insufficient permissions");
+  });
+
+  it("rejects an unauthenticated caller from GET /api/users/tree", async () => {
+    const res = await request(app).get("/api/users/tree");
+    expect(res.status).toBe(401);
+  });
+
   it("deletes a user", async () => {
     const collaborator = await createUser({ role: Role.COLLABORATOR, createdById: entrepreneur.id });
 

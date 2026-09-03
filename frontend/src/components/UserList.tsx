@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../auth/AuthContext";
 import { api } from "../api/client";
-import type { Trade, User } from "../api/types";
+import type { Trade, User, UserTreeEntrepreneur } from "../api/types";
 import { roleLabel, tradeLabel, tradeLabels, trades } from "../constants/labels";
 
 interface UserListProps {
@@ -8,19 +9,30 @@ interface UserListProps {
 }
 
 export function UserList({ refreshSignal }: UserListProps) {
+  const { user: currentUser } = useAuth();
+  const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
+
   const [users, setUsers] = useState<User[] | null>(null);
+  const [tree, setTree] = useState<UserTreeEntrepreneur[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
 
   function reload() {
     setError(null);
-    api
-      .get<User[]>("/users")
-      .then((res) => setUsers(res.data))
-      .catch(() => setError("אירעה שגיאה בטעינת המשתמשים"));
+    if (isSuperAdmin) {
+      api
+        .get<UserTreeEntrepreneur[]>("/users/tree")
+        .then((res) => setTree(res.data))
+        .catch(() => setError("אירעה שגיאה בטעינת המשתמשים"));
+    } else {
+      api
+        .get<User[]>("/users")
+        .then((res) => setUsers(res.data))
+        .catch(() => setError("אירעה שגיאה בטעינת המשתמשים"));
+    }
   }
 
-  useEffect(reload, [refreshSignal]);
+  useEffect(reload, [refreshSignal, isSuperAdmin]);
 
   async function handleDelete(user: User) {
     if (!window.confirm(`למחוק את המשתמש "${user.name}"? הפעולה אינה הפיכה.`)) return;
@@ -52,6 +64,50 @@ export function UserList({ refreshSignal }: UserListProps) {
     }
   }
 
+  function renderUserRow(user: User) {
+    if (editingId === user.id) {
+      return (
+        <UserEditRow
+          user={user}
+          onCancel={() => setEditingId(null)}
+          onSaved={() => {
+            setEditingId(null);
+            reload();
+          }}
+        />
+      );
+    }
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 text-sm">
+        <div className="min-w-0">
+          <p className="font-medium text-ink">{user.name}</p>
+          <p className="numeric text-xs text-ink-faint" dir="ltr">
+            {user.email}
+          </p>
+          <p className="mt-0.5 text-xs text-ink-soft">
+            {roleLabel(user.role)}
+            {user.trade && ` · ${tradeLabel(user.trade)}`}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button type="button" onClick={() => setEditingId(user.id)} className="btn btn-ghost">
+            ערוך
+          </button>
+          <button type="button" onClick={() => handleResetTotp(user)} className="btn btn-ghost">
+            איפוס אימות דו-שלבי
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDelete(user)}
+            className="btn border-brick/30 text-brick-deep hover:bg-brick-tint"
+          >
+            מחק
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-8">
       <h2 className="mb-3 font-display text-lg text-ink">משתמשים קיימים</h2>
@@ -62,54 +118,37 @@ export function UserList({ refreshSignal }: UserListProps) {
         </p>
       )}
 
-      {!users && <p className="text-sm text-ink-soft">טוען...</p>}
+      {!isSuperAdmin && !users && <p className="text-sm text-ink-soft">טוען...</p>}
+      {isSuperAdmin && !tree && <p className="text-sm text-ink-soft">טוען...</p>}
 
-      {users && (
-        <ul className="panel divide-y divide-limestone p-0">
+      {!isSuperAdmin && users && (
+        <ul className="panel divide-y divide-limestone p-0" data-testid="user-list-flat">
           {users.length === 0 && <li className="p-4 text-sm text-ink-faint">אין משתמשים עדיין</li>}
           {users.map((user) => (
-            <li key={user.id}>
-              {editingId === user.id ? (
-                <UserEditRow
-                  user={user}
-                  onCancel={() => setEditingId(null)}
-                  onSaved={() => {
-                    setEditingId(null);
-                    reload();
-                  }}
-                />
-              ) : (
-                <div className="flex flex-wrap items-center justify-between gap-3 p-3 text-sm">
-                  <div className="min-w-0">
-                    <p className="font-medium text-ink">{user.name}</p>
-                    <p className="numeric text-xs text-ink-faint" dir="ltr">
-                      {user.email}
-                    </p>
-                    <p className="mt-0.5 text-xs text-ink-soft">
-                      {roleLabel(user.role)}
-                      {user.trade && ` · ${tradeLabel(user.trade)}`}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <button type="button" onClick={() => setEditingId(user.id)} className="btn btn-ghost">
-                      ערוך
-                    </button>
-                    <button type="button" onClick={() => handleResetTotp(user)} className="btn btn-ghost">
-                      איפוס אימות דו-שלבי
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(user)}
-                      className="btn border-brick/30 text-brick-deep hover:bg-brick-tint"
-                    >
-                      מחק
-                    </button>
-                  </div>
-                </div>
-              )}
-            </li>
+            <li key={user.id}>{renderUserRow(user)}</li>
           ))}
         </ul>
+      )}
+
+      {isSuperAdmin && tree && (
+        <div className="space-y-3" data-testid="user-tree">
+          {tree.length === 0 && (
+            <p className="panel p-4 text-sm text-ink-faint">אין יזמים עדיין</p>
+          )}
+          {tree.map((entrepreneur) => (
+            <div key={entrepreneur.id} className="panel overflow-hidden p-0">
+              <div className="border-b border-limestone bg-blueprint-tint/40">{renderUserRow(entrepreneur)}</div>
+              <ul className="divide-y divide-limestone ps-4">
+                {entrepreneur.collaborators.length === 0 && (
+                  <li className="px-3 py-2 text-sm text-ink-faint">אין אנשי מקצוע משויכים עדיין</li>
+                )}
+                {entrepreneur.collaborators.map((collaborator) => (
+                  <li key={collaborator.id}>{renderUserRow(collaborator)}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

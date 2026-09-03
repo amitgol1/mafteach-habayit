@@ -30,6 +30,25 @@ export interface User {
   trade: string | null;
 }
 
+export interface UserTreeCollaborator {
+  id: number;
+  name: string;
+  email: string;
+  role: "COLLABORATOR";
+  trade: string | null;
+  createdAt: string;
+}
+
+export interface UserTreeEntrepreneur {
+  id: number;
+  name: string;
+  email: string;
+  role: "ENTREPRENEUR";
+  trade: null;
+  createdAt: string;
+  collaborators: UserTreeCollaborator[];
+}
+
 export interface SubPhase {
   id: number;
   phaseId: number;
