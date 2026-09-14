@@ -16,9 +16,11 @@ type LoginResponse =
   | { status: "totp_setup_required"; pendingToken: string; user: User }
   | { status: "totp_required"; pendingToken: string; user: User };
 
+type TotpSetupData = { secret: string; qrCodeDataUrl: string };
+
 type Step =
   | { kind: "credentials"; error?: string }
-  | { kind: "totp_setup"; pendingToken: string; user: User }
+  | { kind: "totp_setup"; pendingToken: string; user: User; setupData?: TotpSetupData }
   | { kind: "totp_verify"; pendingToken: string; user: User };
 
 function pendingAuthErrorMessage(err: unknown): string | undefined {
@@ -26,22 +28,75 @@ function pendingAuthErrorMessage(err: unknown): string | undefined {
   return (err.response?.data as { error?: string } | undefined)?.error;
 }
 
+const PENDING_AUTH_KEY = "pendingAuth";
+
+type PersistedPendingAuth = {
+  step: "totp_setup" | "totp_verify";
+  pendingToken: string;
+  user: User;
+  setupData?: TotpSetupData;
+};
+
+// On mobile, switching to the authenticator app to scan the QR / read the
+// code often backgrounds this tab long enough for the browser to reload it
+// on return. Step state lived only in memory, so that reload silently
+// dropped the user back to the credentials form mid-setup. Persisting the
+// pending step across a reload fixes that; the pendingToken still expires
+// server-side after 10 minutes regardless.
+//
+// setupData is persisted too: /auth/totp/setup overwrites the secret on
+// every call, so re-fetching it after a reload would show a new QR/manual
+// code that no longer matches what the user already entered into their
+// authenticator app.
+function loadPendingAuth(): Step {
+  const raw = sessionStorage.getItem(PENDING_AUTH_KEY);
+  if (!raw) return { kind: "credentials" };
+  try {
+    const parsed = JSON.parse(raw) as PersistedPendingAuth;
+    if (parsed.step === "totp_setup") {
+      return { kind: "totp_setup", pendingToken: parsed.pendingToken, user: parsed.user, setupData: parsed.setupData };
+    }
+    return { kind: "totp_verify", pendingToken: parsed.pendingToken, user: parsed.user };
+  } catch {
+    return { kind: "credentials" };
+  }
+}
+
+function savePendingAuth(entry: PersistedPendingAuth) {
+  sessionStorage.setItem(PENDING_AUTH_KEY, JSON.stringify(entry));
+}
+
+function savePendingAuthSetupData(setupData: TotpSetupData) {
+  const raw = sessionStorage.getItem(PENDING_AUTH_KEY);
+  if (!raw) return;
+  const parsed = JSON.parse(raw) as PersistedPendingAuth;
+  sessionStorage.setItem(PENDING_AUTH_KEY, JSON.stringify({ ...parsed, setupData }));
+}
+
+function clearPendingAuth() {
+  sessionStorage.removeItem(PENDING_AUTH_KEY);
+}
+
 export function Login() {
   const { completeLogin } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>({ kind: "credentials" });
+  const [step, setStep] = useState<Step>(loadPendingAuth);
 
   function handleLoggedIn(token: string, user: User) {
+    clearPendingAuth();
     completeLogin(token, user);
     navigate("/");
   }
 
   function handlePendingExpired() {
+    clearPendingAuth();
     setStep({ kind: "credentials", error: "פג תוקף החיבור, נא להתחבר שוב" });
   }
 
   function handleCredentialsAccepted(data: LoginResponse) {
-    setStep({ kind: data.status === "totp_setup_required" ? "totp_setup" : "totp_verify", pendingToken: data.pendingToken, user: data.user });
+    const kind = data.status === "totp_setup_required" ? "totp_setup" : "totp_verify";
+    savePendingAuth({ step: kind, pendingToken: data.pendingToken, user: data.user });
+    setStep({ kind, pendingToken: data.pendingToken, user: data.user } as Step);
   }
 
   return (
@@ -75,6 +130,8 @@ export function Login() {
           <TotpSetupForm
             pendingToken={step.pendingToken}
             user={step.user}
+            initialSetupData={step.setupData}
+            onSetupData={savePendingAuthSetupData}
             onComplete={handleLoggedIn}
             onExpired={handlePendingExpired}
           />
@@ -176,8 +233,13 @@ interface TotpStepProps {
   onExpired: () => void;
 }
 
-function TotpSetupForm({ pendingToken, user, onComplete, onExpired }: TotpStepProps) {
-  const [setupData, setSetupData] = useState<{ secret: string; qrCodeDataUrl: string } | null>(null);
+interface TotpSetupFormProps extends TotpStepProps {
+  initialSetupData?: TotpSetupData;
+  onSetupData: (data: TotpSetupData) => void;
+}
+
+function TotpSetupForm({ pendingToken, user, initialSetupData, onSetupData, onComplete, onExpired }: TotpSetupFormProps) {
+  const [setupData, setSetupData] = useState<TotpSetupData | null>(initialSetupData ?? null);
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -195,6 +257,12 @@ function TotpSetupForm({ pendingToken, user, onComplete, onExpired }: TotpStepPr
     // `cancelled` flag would falsely discard this single real request's own
     // response. React 18 safely no-ops a state update on an unmounted
     // component, so nothing further is needed for a genuine unmount either.
+    //
+    // If setupData was already restored from sessionStorage (a tab reload
+    // after switching to the authenticator app), skip the call entirely —
+    // firing it again would silently replace the secret the user may have
+    // already entered into their app.
+    if (setupData) return;
     if (requestedRef.current) return;
     requestedRef.current = true;
     axios
@@ -204,12 +272,14 @@ function TotpSetupForm({ pendingToken, user, onComplete, onExpired }: TotpStepPr
         { headers: { Authorization: `Bearer ${pendingToken}` } }
       )
       .then(({ data }) => {
-        setSetupData({ secret: data.secret, qrCodeDataUrl: data.qrCodeDataUrl });
+        const next = { secret: data.secret, qrCodeDataUrl: data.qrCodeDataUrl };
+        setSetupData(next);
+        onSetupData(next);
       })
       .catch(() => {
         onExpired();
       });
-  }, [pendingToken, onExpired]);
+  }, [pendingToken, onExpired, setupData, onSetupData]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
