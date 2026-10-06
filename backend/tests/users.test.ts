@@ -311,4 +311,20 @@ describe("/api/users", () => {
     const check = await request(app).get("/api/users").set("Authorization", authHeader(admin));
     expect(check.body.find((u: { id: number }) => u.id === collaborator.id)).toBeUndefined();
   });
+
+  it("blocks deleting an entrepreneur who still owns projects, with a 409", async () => {
+    await prisma.project.create({
+      data: { name: "Villa", location: "Somewhere", entrepreneurId: entrepreneur.id },
+    });
+
+    const res = await request(app)
+      .delete(`/api/users/${entrepreneur.id}`)
+      .set("Authorization", authHeader(admin));
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("יש למחוק את הפרויקטים של היזם לפני מחיקתו");
+
+    const stillExists = await prisma.user.findUnique({ where: { id: entrepreneur.id } });
+    expect(stillExists).not.toBeNull();
+  });
 });

@@ -48,9 +48,25 @@ type PersistedPendingAuth = {
 // every call, so re-fetching it after a reload would show a new QR/manual
 // code that no longer matches what the user already entered into their
 // authenticator app.
+//
+// Rehydration is gated on this actually being a *reload* of the page
+// (performance navigation type), not just any fresh mount — otherwise a
+// deliberate return to /login (e.g. to log in as someone else after
+// abandoning a pending 2FA flow) would resume the stale flow instead of
+// showing the credentials form, since sessionStorage survives same-origin
+// navigations too.
+function isReloadNavigation(): boolean {
+  const [entry] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
+  return entry?.type === "reload";
+}
+
 function loadPendingAuth(): Step {
   const raw = sessionStorage.getItem(PENDING_AUTH_KEY);
   if (!raw) return { kind: "credentials" };
+  if (!isReloadNavigation()) {
+    sessionStorage.removeItem(PENDING_AUTH_KEY);
+    return { kind: "credentials" };
+  }
   try {
     const parsed = JSON.parse(raw) as PersistedPendingAuth;
     if (parsed.step === "totp_setup") {

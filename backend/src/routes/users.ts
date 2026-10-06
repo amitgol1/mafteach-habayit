@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { Router } from "express";
 import { Role, Trade } from "../constants";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -182,7 +183,22 @@ usersRouter.delete(
       res.status(403).json({ error: "Not authorized for this user" });
       return;
     }
-    await prisma.user.delete({ where: { id } });
+    if (target.role === Role.ENTREPRENEUR) {
+      const projectCount = await prisma.project.count({ where: { entrepreneurId: id } });
+      if (projectCount > 0) {
+        res.status(409).json({ error: "יש למחוק את הפרויקטים של היזם לפני מחיקתו" });
+        return;
+      }
+    }
+    try {
+      await prisma.user.delete({ where: { id } });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+        res.status(409).json({ error: "יש למחוק את הפרויקטים של היזם לפני מחיקתו" });
+        return;
+      }
+      throw err;
+    }
     res.status(204).send();
   })
 );
