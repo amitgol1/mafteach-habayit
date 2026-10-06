@@ -4,7 +4,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { Role, Trade } from "../constants";
 import { requireAuth } from "../middleware-worker/auth";
 import { createDb } from "../db/client";
-import { users } from "../db/schema";
+import { projects, users } from "../db/schema";
 import { assertUserOwnership, requireRole, userTenantFilter } from "../utils-worker/tenantScope";
 import type { AppEnv } from "../worker-env";
 
@@ -45,6 +45,28 @@ usersRouter.get("/by-trade", async (c) => {
   const where = tenantWhere ? and(tradeCondition, tenantWhere) : tradeCondition;
   const rows = await db.select(userSelect).from(users).where(where).orderBy(asc(users.name));
   return c.json(rows);
+});
+
+usersRouter.get("/tree", requireRole(Role.SUPER_ADMIN), async (c) => {
+  const db = createDb(c.env.DB);
+  const columns = { id: true, name: true, email: true, role: true, trade: true, createdAt: true } as const;
+  const entrepreneurs = await db.query.users.findMany({
+    where: eq(users.role, Role.ENTREPRENEUR),
+    columns,
+    with: {
+      createdUsers: {
+        where: eq(users.role, Role.COLLABORATOR),
+        columns,
+        orderBy: asc(users.name),
+      },
+    },
+    orderBy: asc(users.name),
+  });
+  const tree = entrepreneurs.map(({ createdUsers, ...entrepreneur }) => ({
+    ...entrepreneur,
+    collaborators: createdUsers,
+  }));
+  return c.json(tree);
 });
 
 usersRouter.post("/", async (c) => {
@@ -125,6 +147,25 @@ usersRouter.patch("/:id", async (c) => {
   return c.json(user);
 });
 
+usersRouter.post("/:id/reset-totp", async (c) => {
+  const actor = c.get("user");
+  const id = Number(c.req.param("id"));
+  const db = createDb(c.env.DB);
+  const [target] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  if (!target) {
+    return c.json({ error: "User not found" }, 404);
+  }
+  if (!assertUserOwnership(target, actor)) {
+    return c.json({ error: "Not authorized for this user" }, 403);
+  }
+  const [user] = await db
+    .update(users)
+    .set({ totpSecret: null, totpConfirmedAt: null })
+    .where(eq(users.id, id))
+    .returning(userSelect);
+  return c.json(user);
+});
+
 usersRouter.delete("/:id", async (c) => {
   const actor = c.get("user");
   const id = Number(c.req.param("id"));
@@ -135,6 +176,14 @@ usersRouter.delete("/:id", async (c) => {
   }
   if (!assertUserOwnership(target, actor)) {
     return c.json({ error: "Not authorized for this user" }, 403);
+  }
+  // Project.entrepreneurId is ON DELETE RESTRICT; check first so the user
+  // gets a 409 instead of a raw FK failure.
+  if (target.role === Role.ENTREPRENEUR) {
+    const [owned] = await db.select({ id: projects.id }).from(projects).where(eq(projects.entrepreneurId, id)).limit(1);
+    if (owned) {
+      return c.json({ error: "יש למחוק את הפרויקטים של היזם לפני מחיקתו" }, 409);
+    }
   }
   await db.delete(users).where(eq(users.id, id));
   return c.body(null, 204);

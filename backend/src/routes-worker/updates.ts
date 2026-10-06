@@ -129,7 +129,7 @@ updatesRouter.post("/sub-phases/:subPhaseId/updates", requireSubPhaseAccess, asy
   let mediaType: MediaType | null = null;
   if (file) {
     try {
-      const stored = await storeUpload(c.env.UPLOADS_BUCKET, file);
+      const stored = await storeUpload(c.env.UPLOADS_KV, file);
       mediaUrl = stored.url;
       mediaType = stored.mediaType;
     } catch (err) {
@@ -180,7 +180,7 @@ updatesRouter.post("/projects/:projectId/updates", requireProjectAccess, async (
   let mediaType: MediaType | null = null;
   if (file) {
     try {
-      const stored = await storeUpload(c.env.UPLOADS_BUCKET, file);
+      const stored = await storeUpload(c.env.UPLOADS_KV, file);
       mediaUrl = stored.url;
       mediaType = stored.mediaType;
     } catch (err) {

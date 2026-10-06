@@ -4,7 +4,13 @@ import { Role } from "../constants";
 import { requireAuth } from "../middleware-worker/auth";
 import { createDb } from "../db/client";
 import { financialRecords, projects } from "../db/schema";
-import { assertProjectOwnership, requireRole } from "../utils-worker/tenantScope";
+import {
+  assertProjectOwnership,
+  getProjectForPhase,
+  getProjectForSubPhase,
+  getProjectForUnit,
+  requireRole,
+} from "../utils-worker/tenantScope";
 import { FileTooLargeError, UnsupportedFileTypeError, storeUpload } from "../utils-worker/upload";
 import type { AppEnv } from "../worker-env";
 
@@ -55,14 +61,40 @@ financialRouter.post("/projects/:projectId/financials", async (c) => {
   }
 
   const body = await c.req.parseBody();
+  const unitId = typeof body.unitId === "string" ? body.unitId : undefined;
   const phaseId = typeof body.phaseId === "string" ? body.phaseId : undefined;
+  const subPhaseId = typeof body.subPhaseId === "string" ? body.subPhaseId : undefined;
   const amountPaid = typeof body.amountPaid === "string" ? body.amountPaid : undefined;
   const file = body.receipt instanceof File && body.receipt.size > 0 ? body.receipt : undefined;
+
+  const setCount = [unitId, phaseId, subPhaseId].filter(Boolean).length;
+  if (setCount > 1) {
+    return c.json({ error: "at most one of unitId, phaseId, or subPhaseId may be set" }, 400);
+  }
+
+  const links = [
+    { name: "unitId", raw: unitId, resolveProject: getProjectForUnit },
+    { name: "phaseId", raw: phaseId, resolveProject: getProjectForPhase },
+    { name: "subPhaseId", raw: subPhaseId, resolveProject: getProjectForSubPhase },
+  ];
+  const linkIds: Record<string, number | null> = { unitId: null, phaseId: null, subPhaseId: null };
+  for (const link of links) {
+    if (!link.raw) continue;
+    const num = Number(link.raw);
+    if (!Number.isFinite(num)) {
+      return c.json({ error: `${link.name} must be a number` }, 400);
+    }
+    const owner = await link.resolveProject(db, num);
+    if (!owner || owner.id !== projectId) {
+      return c.json({ error: `${link.name} does not belong to this project` }, 400);
+    }
+    linkIds[link.name] = num;
+  }
 
   let receiptMediaUrl: string | null = null;
   if (file) {
     try {
-      const stored = await storeUpload(c.env.UPLOADS_BUCKET, file);
+      const stored = await storeUpload(c.env.UPLOADS_KV, file);
       receiptMediaUrl = stored.url;
     } catch (err) {
       if (err instanceof UnsupportedFileTypeError) return c.json({ error: err.message }, 400);
@@ -75,7 +107,9 @@ financialRouter.post("/projects/:projectId/financials", async (c) => {
     .insert(financialRecords)
     .values({
       projectId,
-      phaseId: phaseId ? Number(phaseId) : null,
+      unitId: linkIds.unitId,
+      phaseId: linkIds.phaseId,
+      subPhaseId: linkIds.subPhaseId,
       amountPaid: amountPaid ? Number(amountPaid) : 0,
       receiptMediaUrl,
     })

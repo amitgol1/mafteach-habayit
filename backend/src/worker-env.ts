@@ -3,14 +3,16 @@
 // are consistent across files.
 export type Bindings = {
   DB: D1Database;
-  UPLOADS_BUCKET: R2Bucket;
+  UPLOADS_KV: KVNamespace;
   JWT_SECRET: string;
+  TOTP_ENCRYPTION_KEY: string;
 };
 
 export type AuthedUser = { id: number; role: string };
 
 export type Variables = {
   user: AuthedUser;
+  pendingUserId: number;
 };
 
 export type AppEnv = { Bindings: Bindings; Variables: Variables };

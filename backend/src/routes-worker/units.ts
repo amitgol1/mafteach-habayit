@@ -30,6 +30,39 @@ unitsRouter.post("/", async (c) => {
   return c.json(unit, 201);
 });
 
+unitsRouter.post("/bulk", async (c) => {
+  const actor = c.get("user");
+  const { projectId, identifiers } = await c.req.json<{ projectId?: number; identifiers?: string[] }>();
+  if (!projectId) {
+    return c.json({ error: "projectId is required" }, 400);
+  }
+  if (
+    !Array.isArray(identifiers) ||
+    identifiers.length < 1 ||
+    identifiers.length > 100 ||
+    identifiers.some((i) => typeof i !== "string" || i.trim().length === 0)
+  ) {
+    return c.json({ error: "identifiers must be an array of 1 to 100 non-empty strings" }, 400);
+  }
+  const db = createDb(c.env.DB);
+  const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+  if (!project) {
+    return c.json({ error: "Project not found" }, 404);
+  }
+  if (!assertProjectOwnership(project, actor)) {
+    return c.json({ error: "Not authorized for this project" }, 403);
+  }
+  // One INSERT per identifier inside db.batch (D1's atomicity primitive —
+  // see routes-worker/projects.ts), not one multi-row INSERT: D1 caps bound
+  // parameters per statement at 100, and 100 units x 2 columns exceeds it.
+  const inserts = identifiers.map((identifier) =>
+    db.insert(units).values({ projectId, identifier: identifier.trim() }).returning()
+  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const results = (await db.batch(inserts as any)) as (typeof units.$inferSelect)[][];
+  return c.json(results.map(([unit]) => unit), 201);
+});
+
 unitsRouter.patch("/:id", async (c) => {
   const actor = c.get("user");
   const id = Number(c.req.param("id"));

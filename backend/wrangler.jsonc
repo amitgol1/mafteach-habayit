@@ -9,28 +9,36 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "mafteach-habayit-api",
   "main": "src/worker.ts",
-  "compatibility_date": "2024-09-23",
+  "compatibility_date": "2026-08-18",
+  // otplib (TOTP) and the AES-GCM secret encryption in utils-worker/totpCrypto.ts
+  // use node:crypto.
+  "compatibility_flags": ["nodejs_compat"],
 
-  // D1 binding. database_id is a placeholder — no Cloudflare account/auth
-  // exists for this POC yet. `wrangler dev` runs Miniflare locally by
-  // default (no --remote flag), which emulates D1 against local SQLite
-  // state under .wrangler/state and never contacts the Cloudflare API, so
-  // this placeholder id works fine for local dev. Replace with a real id
-  // (from `wrangler d1 create`) once/if this POC needs a live D1 database.
+  // The built frontend (frontend/dist) is served by this same Worker so the
+  // SPA's relative /api and /uploads calls stay same-origin, as with the Vite
+  // proxy in local dev. Unmatched paths fall back to index.html for client
+  // routing.
+  "assets": {
+    "directory": "../frontend/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/uploads/*"]
+  },
+
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "mafteach-habayit-db",
-      "database_id": "local-dev-placeholder-mafteach-habayit-db"
+      "database_id": "9a73c975-d00a-438e-9b44-23dc5a354ffd"
     }
   ],
 
-  // R2 binding. Same local-only reasoning as D1 above — Miniflare emulates
-  // R2 locally without needing the bucket to exist in a real account.
-  "r2_buckets": [
+  // Uploaded files. KV instead of R2 because R2 can't be enabled on this
+  // account without a payment method; KV's free tier needs none. See
+  // utils-worker/upload.ts for the chunking around KV's 25 MiB value limit.
+  "kv_namespaces": [
     {
-      "binding": "UPLOADS_BUCKET",
-      "bucket_name": "mafteach-habayit-uploads"
+      "binding": "UPLOADS_KV",
+      "id": "8637a7f5043c4330ba4681fcdf57cba8"
     }
   ]
 }

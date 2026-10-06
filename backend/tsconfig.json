@@ -18,6 +18,7 @@
     "src/worker-env.ts",
     "src/db/client.ts",
     "src/db/seed.ts",
+    "src/db/import-from-prisma.ts",
     "src/middleware-worker",
     "src/routes-worker",
     "src/utils-worker"

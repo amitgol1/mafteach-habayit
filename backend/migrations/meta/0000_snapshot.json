@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "8b6f424e-cb3c-4878-9579-5e3814324fef",
+  "id": "538718b5-cf61-4b92-9130-b69d784d4a07",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "FinancialRecord": {
@@ -21,8 +21,22 @@
           "notNull": true,
           "autoincrement": false
         },
+        "unitId": {
+          "name": "unitId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "phaseId": {
           "name": "phaseId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "subPhaseId": {
+          "name": "subPhaseId",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -60,10 +74,24 @@
           ],
           "isUnique": false
         },
+        "FinancialRecord_unitId_idx": {
+          "name": "FinancialRecord_unitId_idx",
+          "columns": [
+            "unitId"
+          ],
+          "isUnique": false
+        },
         "FinancialRecord_phaseId_idx": {
           "name": "FinancialRecord_phaseId_idx",
           "columns": [
             "phaseId"
+          ],
+          "isUnique": false
+        },
+        "FinancialRecord_subPhaseId_idx": {
+          "name": "FinancialRecord_subPhaseId_idx",
+          "columns": [
+            "subPhaseId"
           ],
           "isUnique": false
         }
@@ -82,12 +110,38 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
+        "FinancialRecord_unitId_Unit_id_fk": {
+          "name": "FinancialRecord_unitId_Unit_id_fk",
+          "tableFrom": "FinancialRecord",
+          "tableTo": "Unit",
+          "columnsFrom": [
+            "unitId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "FinancialRecord_phaseId_Phase_id_fk": {
           "name": "FinancialRecord_phaseId_Phase_id_fk",
           "tableFrom": "FinancialRecord",
           "tableTo": "Phase",
           "columnsFrom": [
             "phaseId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "FinancialRecord_subPhaseId_SubPhase_id_fk": {
+          "name": "FinancialRecord_subPhaseId_SubPhase_id_fk",
+          "tableFrom": "FinancialRecord",
+          "tableTo": "SubPhase",
+          "columnsFrom": [
+            "subPhaseId"
           ],
           "columnsTo": [
             "id"
@@ -395,6 +449,13 @@
         },
         "currentStage": {
           "name": "currentStage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "projectType": {
+          "name": "projectType",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -744,6 +805,20 @@
         "trade": {
           "name": "trade",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "totpSecret": {
+          "name": "totpSecret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "totpConfirmedAt": {
+          "name": "totpConfirmedAt",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

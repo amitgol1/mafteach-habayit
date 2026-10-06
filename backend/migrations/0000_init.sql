@@ -1,16 +1,22 @@
 CREATE TABLE `FinancialRecord` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`projectId` integer NOT NULL,
+	`unitId` integer,
 	`phaseId` integer,
+	`subPhaseId` integer,
 	`amountPaid` real DEFAULT 0 NOT NULL,
 	`receiptMediaUrl` text,
 	`timestamp` integer DEFAULT (unixepoch()) NOT NULL,
 	FOREIGN KEY (`projectId`) REFERENCES `Project`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`phaseId`) REFERENCES `Phase`(`id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`unitId`) REFERENCES `Unit`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`phaseId`) REFERENCES `Phase`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`subPhaseId`) REFERENCES `SubPhase`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE INDEX `FinancialRecord_projectId_idx` ON `FinancialRecord` (`projectId`);--> statement-breakpoint
+CREATE INDEX `FinancialRecord_unitId_idx` ON `FinancialRecord` (`unitId`);--> statement-breakpoint
 CREATE INDEX `FinancialRecord_phaseId_idx` ON `FinancialRecord` (`phaseId`);--> statement-breakpoint
+CREATE INDEX `FinancialRecord_subPhaseId_idx` ON `FinancialRecord` (`subPhaseId`);--> statement-breakpoint
 CREATE TABLE `PhaseAssignment` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`userId` integer NOT NULL,
@@ -53,6 +59,7 @@ CREATE TABLE `Project` (
 	`owners` text,
 	`totalBudget` real,
 	`currentStage` text,
+	`projectType` text,
 	`createdAt` integer DEFAULT (unixepoch()) NOT NULL,
 	`entrepreneurId` integer NOT NULL,
 	FOREIGN KEY (`entrepreneurId`) REFERENCES `User`(`id`) ON UPDATE no action ON DELETE restrict
@@ -102,6 +109,8 @@ CREATE TABLE `User` (
 	`passwordHash` text NOT NULL,
 	`role` text NOT NULL,
 	`trade` text,
+	`totpSecret` text,
+	`totpConfirmedAt` integer,
 	`createdAt` integer DEFAULT (unixepoch()) NOT NULL,
 	`createdById` integer,
 	FOREIGN KEY (`createdById`) REFERENCES `User`(`id`) ON UPDATE no action ON DELETE set null

@@ -9,7 +9,7 @@ import {
   uniqueIndex,
   type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
-import type { Role, PhaseStatus, MediaType, Trade, ProjectStage } from "../constants";
+import type { Role, PhaseStatus, MediaType, Trade, ProjectStage, ProjectType } from "../constants";
 
 // Drizzle translation of prisma/schema.prisma for the Cloudflare D1 POC.
 // D1/SQLite has no native enum support (same constraint Prisma hit) — these
@@ -45,6 +45,10 @@ export const users = sqliteTable(
     passwordHash: text("passwordHash").notNull(),
     role: text("role").$type<Role>().notNull(),
     trade: text("trade").$type<Trade>(),
+    // AES-256-GCM encrypted base32 TOTP secret — see docs/specs/totp-2fa.md
+    totpSecret: text("totpSecret"),
+    // the "2FA fully configured" signal used to route login, not totpSecret
+    totpConfirmedAt: integer("totpConfirmedAt", { mode: "timestamp" }),
     createdAt: integer("createdAt", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),
@@ -83,6 +87,8 @@ export const projects = sqliteTable(
     owners: text("owners"),
     totalBudget: real("totalBudget"),
     currentStage: text("currentStage").$type<ProjectStage>(),
+    // null = not set (legacy projects keep the free-text Unit flow)
+    projectType: text("projectType").$type<ProjectType>(),
     createdAt: integer("createdAt", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),
@@ -121,6 +127,7 @@ export const units = sqliteTable(
 export const unitsRelations = relations(units, ({ one, many }) => ({
   project: one(projects, { fields: [units.projectId], references: [projects.id] }),
   phases: many(phases),
+  financialRecords: many(financialRecords),
 }));
 
 export const phases = sqliteTable(
@@ -166,6 +173,7 @@ export const subPhasesRelations = relations(subPhases, ({ one, many }) => ({
   phase: one(phases, { fields: [subPhases.phaseId], references: [phases.id] }),
   assignments: many(phaseAssignments),
   updates: many(updates),
+  financialRecords: many(financialRecords),
 }));
 
 export const phaseAssignments = sqliteTable(
@@ -242,7 +250,7 @@ export const updates = sqliteTable(
     // free-text body; was "messageText" — renamed for clarity now that
     // subject exists alongside it
     description: text("description"),
-    // local path under /uploads on Express; R2 object key under this POC
+    // local path under /uploads on Express; KV key under the Worker
     mediaUrl: text("mediaUrl"),
     mediaType: text("mediaType").$type<MediaType>(),
     timestamp: integer("timestamp", { mode: "timestamp" })
@@ -268,9 +276,13 @@ export const financialRecords = sqliteTable(
     projectId: integer("projectId")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
+    // at most one of unitId/phaseId/subPhaseId is set — enforced by route
+    // validation, see docs/specs/payment-links.md
+    unitId: integer("unitId").references(() => units.id, { onDelete: "set null" }),
     phaseId: integer("phaseId").references(() => phases.id, { onDelete: "set null" }),
+    subPhaseId: integer("subPhaseId").references(() => subPhases.id, { onDelete: "set null" }),
     amountPaid: real("amountPaid").notNull().default(0),
-    // local path under /uploads on Express; R2 object key under this POC
+    // local path under /uploads on Express; KV key under the Worker
     receiptMediaUrl: text("receiptMediaUrl"),
     timestamp: integer("timestamp", { mode: "timestamp" })
       .notNull()
@@ -278,11 +290,15 @@ export const financialRecords = sqliteTable(
   },
   (table) => [
     index("FinancialRecord_projectId_idx").on(table.projectId),
+    index("FinancialRecord_unitId_idx").on(table.unitId),
     index("FinancialRecord_phaseId_idx").on(table.phaseId),
+    index("FinancialRecord_subPhaseId_idx").on(table.subPhaseId),
   ],
 );
 
 export const financialRecordsRelations = relations(financialRecords, ({ one }) => ({
   project: one(projects, { fields: [financialRecords.projectId], references: [projects.id] }),
+  unit: one(units, { fields: [financialRecords.unitId], references: [units.id] }),
   phase: one(phases, { fields: [financialRecords.phaseId], references: [phases.id] }),
+  subPhase: one(subPhases, { fields: [financialRecords.subPhaseId], references: [subPhases.id] }),
 }));

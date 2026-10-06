@@ -1,7 +1,7 @@
 import type { MediaType } from "../constants";
 
 // Port of src/utils/upload.ts. Multer's disk storage + fileFilter + limits
-// become a single `storeUpload` that validates and writes directly to R2 —
+// become a single `storeUpload` that validates and writes directly to KV —
 // there's no Workers-runtime middleware equivalent to Multer, so the
 // validation it used to do inline (mime allowlist, size cap) is done here by
 // hand against the Web-standard `File` Hono's `c.req.parseBody()` returns.
@@ -54,8 +54,7 @@ export function uploadedFileUrl(key: string): string {
 }
 
 // Same collision-resistant naming scheme as Multer's diskStorage filename()
-// (Date.now() + random suffix + original extension), reused as the R2
-// object key.
+// (Date.now() + random suffix + original extension), reused as the KV key.
 function objectKey(originalName: string): string {
   const dotIndex = originalName.lastIndexOf(".");
   const ext = dotIndex >= 0 ? originalName.slice(dotIndex) : "";
@@ -63,8 +62,28 @@ function objectKey(originalName: string): string {
   return `${unique}${ext}`;
 }
 
+// KV caps a single value at 25 MiB, so a file is stored as consecutive
+// chunks under `<key>#<n>`, plus a small JSON manifest under `<key>` itself.
+export const CHUNK_SIZE = 20 * 1024 * 1024;
+
+export type UploadManifest = { contentType: string; size: number; chunkSize: number; chunks: number };
+
+export function chunkKey(key: string, index: number): string {
+  return `${key}#${index}`;
+}
+
+export async function putChunked(kv: KVNamespace, key: string, data: Blob, contentType: string): Promise<void> {
+  const chunks = Math.max(1, Math.ceil(data.size / CHUNK_SIZE));
+  for (let i = 0; i < chunks; i++) {
+    await kv.put(chunkKey(key, i), await data.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE).arrayBuffer());
+  }
+  const manifest: UploadManifest = { contentType, size: data.size, chunkSize: CHUNK_SIZE, chunks };
+  // Manifest last: a reader never sees a manifest whose chunks aren't written yet.
+  await kv.put(key, JSON.stringify(manifest));
+}
+
 export async function storeUpload(
-  bucket: R2Bucket,
+  kv: KVNamespace,
   file: File
 ): Promise<{ url: string; mediaType: MediaType }> {
   if (!allowedMimeTypes.has(file.type)) {
@@ -74,6 +93,6 @@ export async function storeUpload(
     throw new FileTooLargeError();
   }
   const key = objectKey(file.name);
-  await bucket.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } });
+  await putChunked(kv, key, file, file.type);
   return { url: uploadedFileUrl(key), mediaType: mediaTypeFromMime(file.type) };
 }

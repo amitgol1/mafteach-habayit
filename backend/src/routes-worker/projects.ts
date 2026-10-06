@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { eq, inArray, and, sql } from "drizzle-orm";
-import { ProjectStage, Role, Trade } from "../constants";
+import { ProjectStage, ProjectType, Role, Trade } from "../constants";
 import { requireAuth } from "../middleware-worker/auth";
 import { createDb, type Db } from "../db/client";
 import { projectParticipants, projects, users } from "../db/schema";
@@ -20,6 +20,7 @@ projectsRouter.use(requireAuth);
 
 const validTrades = Object.values(Trade) as string[];
 const validStages = Object.values(ProjectStage) as string[];
+const validProjectTypes = Object.values(ProjectType) as string[];
 
 const projectWithParticipants = {
   with: { participants: { with: { user: { columns: { id: true, name: true, trade: true } } } } },
@@ -120,20 +121,25 @@ projectsRouter.get("/:id", async (c) => {
 
 projectsRouter.post("/", requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR), async (c) => {
   const actor = c.get("user");
-  const { name, location, owners, totalBudget, currentStage, participants, entrepreneurId } = await c.req.json<{
-    name?: string;
-    location?: string;
-    owners?: string;
-    totalBudget?: number;
-    currentStage?: string;
-    participants?: { trade?: string; userId?: number }[];
-    entrepreneurId?: number;
-  }>();
+  const { name, location, owners, totalBudget, currentStage, projectType, participants, entrepreneurId } =
+    await c.req.json<{
+      name?: string;
+      location?: string;
+      owners?: string;
+      totalBudget?: number;
+      currentStage?: string;
+      projectType?: string;
+      participants?: { trade?: string; userId?: number }[];
+      entrepreneurId?: number;
+    }>();
   if (!name || !location) {
     return c.json({ error: "name and location are required" }, 400);
   }
   if (currentStage && !validStages.includes(currentStage)) {
     return c.json({ error: `currentStage must be one of ${validStages.join(", ")}` }, 400);
+  }
+  if (projectType && !validProjectTypes.includes(projectType)) {
+    return c.json({ error: `projectType must be one of ${validProjectTypes.join(", ")}` }, 400);
   }
 
   const db = createDb(c.env.DB);
@@ -176,6 +182,7 @@ projectsRouter.post("/", requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR), async
       owners: owners ?? null,
       totalBudget: totalBudget ?? null,
       currentStage: (currentStage ?? null) as ProjectStage | null,
+      projectType: (projectType ?? null) as ProjectType | null,
       entrepreneurId: resolvedEntrepreneurId,
     })
     .returning();
@@ -205,16 +212,20 @@ projectsRouter.patch("/:id", requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR), a
     return c.json({ error: "Not authorized for this project" }, 403);
   }
 
-  const { name, location, owners, totalBudget, currentStage, participants } = await c.req.json<{
+  const { name, location, owners, totalBudget, currentStage, projectType, participants } = await c.req.json<{
     name?: string;
     location?: string;
     owners?: string;
     totalBudget?: number;
     currentStage?: string;
+    projectType?: string;
     participants?: { trade?: string; userId?: number }[];
   }>();
   if (currentStage && !validStages.includes(currentStage)) {
     return c.json({ error: `currentStage must be one of ${validStages.join(", ")}` }, 400);
+  }
+  if (projectType && !validProjectTypes.includes(projectType)) {
+    return c.json({ error: `projectType must be one of ${validProjectTypes.join(", ")}` }, 400);
   }
 
   let participantsData: { trade: Trade; userId: number }[] | undefined;
@@ -259,6 +270,7 @@ projectsRouter.patch("/:id", requireRole(Role.SUPER_ADMIN, Role.ENTREPRENEUR), a
       owners,
       totalBudget,
       currentStage: currentStage as ProjectStage | undefined,
+      projectType: projectType as ProjectType | undefined,
     })
     .where(eq(projects.id, id));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

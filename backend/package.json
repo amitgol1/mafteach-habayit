@@ -9,6 +9,7 @@
     "types:worker": "wrangler types",
     "db:generate": "drizzle-kit generate",
     "db:migrate:worker": "wrangler d1 migrations apply mafteach-habayit-db --local",
+    "import:worker": "tsx src/db/import-from-prisma.ts",
     "seed:worker": "tsx src/db/seed.ts",
     "build": "tsc",
     "start": "node dist/index.js",
@@ -18,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e:prepare": "rm -f prisma/e2e.db prisma/e2e.db-journal && DATABASE_URL=\"file:./e2e.db\" prisma migrate deploy && DATABASE_URL=\"file:./e2e.db\" TOTP_ENCRYPTION_KEY=\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\" tsx prisma/seed.ts",
-    "test:e2e:serve": "npm run test:e2e:prepare && DATABASE_URL=\"file:./e2e.db\" PORT=4001 JWT_SECRET=\"e2e-jwt-secret\" TOTP_ENCRYPTION_KEY=\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\" UPLOADS_DIR=\"./tests-tmp/e2e-uploads\" tsx src/index.ts"
+    "test:e2e:serve": "npm run test:e2e:prepare && DATABASE_URL=\"file:./e2e.db\" PORT=4001 JWT_SECRET=\"e2e-jwt-secret\" TOTP_ENCRYPTION_KEY=\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\" UPLOADS_DIR=\"./tests-tmp/e2e-uploads\" tsx src/index.ts",
+    "test:e2e:worker:serve": "npm run test:e2e:prepare && rm -rf .wrangler/e2e && wrangler d1 migrations apply DB --local --persist-to .wrangler/e2e && tsx src/db/import-from-prisma.ts prisma/e2e.db tests-tmp/e2e-worker-uploads -- --local --persist-to .wrangler/e2e && wrangler dev --port 4001 --persist-to .wrangler/e2e --var JWT_SECRET:e2e-jwt-secret --var TOTP_ENCRYPTION_KEY:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
   },
   "dependencies": {
     "@prisma/client": "^5.19.1",
