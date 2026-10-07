@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import bcrypt from "bcryptjs";
 import { sign } from "hono/jwt";
 import { eq } from "drizzle-orm";
 import { authenticator } from "otplib";
@@ -7,6 +6,7 @@ import * as qrcode from "qrcode";
 import { createDb } from "../db/client";
 import { users } from "../db/schema";
 import { issueSessionToken, requirePendingAuth } from "../middleware-worker/auth";
+import { hashPassword, needsRehash, verifyPassword } from "../utils/password";
 import { decryptSecret, encryptSecret } from "../utils-worker/totpCrypto";
 import type { AppEnv } from "../worker-env";
 
@@ -29,8 +29,11 @@ authRouter.post("/login", async (c) => {
 
   const db = createDb(c.env.DB);
   const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+  if (!user || !(await verifyPassword(password, user.passwordHash))) {
     return c.json({ error: "Invalid credentials" }, 401);
+  }
+  if (needsRehash(user.passwordHash)) {
+    await db.update(users).set({ passwordHash: await hashPassword(password) }).where(eq(users.id, user.id));
   }
 
   const pendingToken = await sign(

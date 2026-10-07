@@ -28,6 +28,15 @@ function pendingAuthErrorMessage(err: unknown): string | undefined {
   return (err.response?.data as { error?: string } | undefined)?.error;
 }
 
+// Anything other than a 401 (a 5xx such as Cloudflare's "exceeded resource
+// limits", or a network failure) is not the user's fault — say so instead of
+// blaming their credentials or session.
+function isUnauthorized(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.response?.status === 401;
+}
+
+const SERVER_ERROR_MESSAGE = "תקלה זמנית בשרת, נסו שוב בעוד רגע";
+
 const PENDING_AUTH_KEY = "pendingAuth";
 
 type PersistedPendingAuth = {
@@ -104,9 +113,9 @@ export function Login() {
     navigate("/");
   }
 
-  function handlePendingExpired() {
+  function handlePendingExpired(message = "פג תוקף החיבור, נא להתחבר שוב") {
     clearPendingAuth();
-    setStep({ kind: "credentials", error: "פג תוקף החיבור, נא להתחבר שוב" });
+    setStep({ kind: "credentials", error: message });
   }
 
   function handleCredentialsAccepted(data: LoginResponse) {
@@ -183,8 +192,8 @@ function CredentialsForm({ initialError, onLoggedIn }: CredentialsFormProps) {
     try {
       const { data } = await api.post<LoginResponse>("/auth/login", { email, password });
       onLoggedIn(data);
-    } catch {
-      setError("אימייל או סיסמה שגויים");
+    } catch (err) {
+      setError(isUnauthorized(err) ? "אימייל או סיסמה שגויים" : SERVER_ERROR_MESSAGE);
     } finally {
       setLoading(false);
     }
@@ -246,7 +255,7 @@ interface TotpStepProps {
   pendingToken: string;
   user: User;
   onComplete: (token: string, user: User) => void;
-  onExpired: () => void;
+  onExpired: (message?: string) => void;
 }
 
 interface TotpSetupFormProps extends TotpStepProps {
@@ -292,8 +301,8 @@ function TotpSetupForm({ pendingToken, user, initialSetupData, onSetupData, onCo
         setSetupData(next);
         onSetupData(next);
       })
-      .catch(() => {
-        onExpired();
+      .catch((err) => {
+        onExpired(isUnauthorized(err) ? undefined : SERVER_ERROR_MESSAGE);
       });
   }, [pendingToken, onExpired, setupData, onSetupData]);
 
@@ -311,8 +320,10 @@ function TotpSetupForm({ pendingToken, user, initialSetupData, onSetupData, onCo
     } catch (err) {
       if (pendingAuthErrorMessage(err) === "Invalid code") {
         setCodeError("קוד שגוי, נסו שוב");
-      } else {
+      } else if (isUnauthorized(err)) {
         onExpired();
+      } else {
+        setCodeError(SERVER_ERROR_MESSAGE);
       }
     } finally {
       setSubmitting(false);
@@ -409,8 +420,10 @@ function TotpVerifyForm({ pendingToken, user, onComplete, onExpired }: TotpStepP
     } catch (err) {
       if (pendingAuthErrorMessage(err) === "Invalid code") {
         setCodeError("קוד שגוי, נסו שוב");
-      } else {
+      } else if (isUnauthorized(err)) {
         onExpired();
+      } else {
+        setCodeError(SERVER_ERROR_MESSAGE);
       }
     } finally {
       setSubmitting(false);

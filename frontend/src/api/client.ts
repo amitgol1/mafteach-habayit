@@ -13,7 +13,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => {
     const refreshedToken = response.headers["x-refreshed-token"];
-    if (refreshedToken) {
+    // Only refresh a live session: a response still in flight when the user
+    // logged out would otherwise write the token back and undo the logout.
+    if (refreshedToken && localStorage.getItem("token")) {
       localStorage.setItem("token", refreshedToken);
     }
     return response;

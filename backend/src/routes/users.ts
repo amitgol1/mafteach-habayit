@@ -1,10 +1,10 @@
-import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { Router } from "express";
 import { Role, Trade } from "../constants";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { AuthedRequest, requireAuth } from "../middleware/auth";
 import { prisma } from "../prisma";
+import { hashPassword } from "../utils/password";
 import { assertUserOwnership, requireRole, userTenantFilter } from "../utils/tenantScope";
 
 export const usersRouter = Router();
@@ -108,7 +108,7 @@ usersRouter.post(
       }
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await hashPassword(password);
     const user = await prisma.user.create({
       data: { name, email, passwordHash, role, trade: trade ?? null, createdById: req.user!.id },
       select: userSelect,

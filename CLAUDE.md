@@ -25,7 +25,7 @@ Custom agents live in `.claude/agents/`: `product-manager`, `team-lead`, `be-dev
 
 ## Non-negotiable: test isolation
 
-Production data lives on Cloudflare (see above) — no test or manual check may write to the remote D1/KV. Locally, `backend/prisma/dev.db` is still in use through live dev servers on ports 4000/5173. Any test run — automated (Vitest/Playwright) or manual (curl smoke-testing) — MUST NOT touch that database or those servers.
+Production data lives on Cloudflare (see above) — no test or manual check may write to the remote D1/KV, with one exception: the live QA suite (`frontend/e2e-live/`, run only when the user asks). It logs in as the dedicated `qa-admin@mafteach-habayit.local` (credentials in gitignored `frontend/e2e-live/.env`), creates only `QA-`-prefixed data, never reads-then-modifies or deletes a record it didn't create, and deletes everything it created even on failure. Locally, `backend/prisma/dev.db` is still in use through live dev servers on ports 4000/5173. Any test run — automated (Vitest/Playwright) or manual (curl smoke-testing) — MUST NOT touch that database or those servers.
 
 - Backend tests (`backend/tests/`, run via `npm test`) use a separate `test.db` via `backend/.env.test`, guarded in `backend/tests/globalSetup.ts`/`setup.ts` so a test run can never resolve to the real `DATABASE_URL`.
 - Frontend E2E (`frontend/e2e/`, run via `npx playwright test`) spins up an isolated backend (port 4001, `e2e.db`) and frontend (port 5174) per `frontend/playwright.config.ts`, torn down after.

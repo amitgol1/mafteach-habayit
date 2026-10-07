@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import bcrypt from "bcryptjs";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { Role, Trade } from "../constants";
 import { requireAuth } from "../middleware-worker/auth";
 import { createDb } from "../db/client";
+import { hashPassword } from "../utils/password";
 import { projects, users } from "../db/schema";
 import { assertUserOwnership, requireRole, userTenantFilter } from "../utils-worker/tenantScope";
 import type { AppEnv } from "../worker-env";
@@ -99,7 +99,7 @@ usersRouter.post("/", async (c) => {
     }
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  const passwordHash = await hashPassword(password);
   const [user] = await db
     .insert(users)
     .values({

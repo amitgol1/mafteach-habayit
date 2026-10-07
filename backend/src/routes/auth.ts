@@ -1,4 +1,3 @@
-import bcrypt from "bcryptjs";
 import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { authenticator } from "otplib";
@@ -6,6 +5,7 @@ import * as qrcode from "qrcode";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { PendingAuthedRequest, requirePendingAuth } from "../middleware/auth";
 import { prisma } from "../prisma";
+import { hashPassword, needsRehash, verifyPassword } from "../utils/password";
 import { decryptSecret, encryptSecret } from "../utils/totpCrypto";
 
 // otplib defaults to window: 0 — zero clock-drift tolerance, meaning a code
@@ -35,9 +35,12 @@ authRouter.post(
     }
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (!user || !(await verifyPassword(password, user.passwordHash))) {
       res.status(401).json({ error: "Invalid credentials" });
       return;
+    }
+    if (needsRehash(user.passwordHash)) {
+      await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(password) } });
     }
 
     const pendingToken = jwt.sign({ id: user.id, kind: "totp_pending" }, process.env.JWT_SECRET!, {
