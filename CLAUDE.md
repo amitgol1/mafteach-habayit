@@ -13,7 +13,19 @@ Production runs on Cloudflare Workers (free plan): https://mafteach-habayit-api.
 | Schema | `backend/src/db/schema.ts` (Drizzle) → `backend/migrations/` | `backend/prisma/schema.prisma` |
 | Data | D1 `mafteach-habayit-db`, uploads in KV `UPLOADS_KV` | `backend/prisma/dev.db`, `/uploads` |
 
-Every backend change — route, validation, schema — goes into **both** columns. A change made only in Express works locally and never reaches production. Schema changes need a Drizzle migration (`npx drizzle-kit generate`) applied remotely (`npx wrangler d1 migrations apply DB --remote`) before deploying. Verify Worker changes with `npx playwright test -c playwright.worker.config.ts` (in `/frontend`). Never deploy (`wrangler deploy`), apply remote migrations, or write to remote D1/KV without the user explicitly asking.
+Every backend change — route, validation, schema — goes into **both** columns. A change made only in Express works locally and never reaches production. Schema changes need a Drizzle migration (`npx drizzle-kit generate`); `npm run deploy:dev` / `deploy:prod` apply it before deploying. Verify Worker changes locally with `npx playwright test -c playwright.worker.config.ts` (in `/frontend`).
+
+## Release flow: dev → QA → approval → prod
+
+A second Cloudflare environment, **dev** (https://mafteach-habayit-api-dev.mafteach-habayit-backend.workers.dev, Worker `mafteach-habayit-api-dev`, D1 `mafteach-habayit-db-dev`, own KV; `--env dev` in `backend/wrangler.jsonc`), holds a copy of production data for QA.
+
+1. `cd backend && npm run copy:prod-to-dev` — replace dev's D1/KV with a copy of production (production is only read).
+2. `npm run deploy:dev` — deploy the current code to dev.
+3. team-lead runs the QA suite against dev (`cd frontend && npx playwright test -c playwright.live.config.ts`) and gives a go/no-go.
+4. Only with QA approval **and** the user's explicit go: `npm run deploy:prod`.
+
+Never deploy to production, apply production migrations, or write to production D1/KV without the user explicitly asking. Plain `wrangler deploy` (no `--env`) targets production.
+
 ## Agent team workflow
 
 Custom agents live in `.claude/agents/`: `product-manager`, `team-lead`, `be-developer`, `fe-developer`. Use this sequence for non-trivial work (schema changes, new features, cross-cutting fixes):
@@ -25,7 +37,7 @@ Custom agents live in `.claude/agents/`: `product-manager`, `team-lead`, `be-dev
 
 ## Non-negotiable: test isolation
 
-Production data lives on Cloudflare (see above) — no test or manual check may write to the remote D1/KV, with one exception: the live QA suite (`frontend/e2e-live/`, run only when the user asks). It logs in as the dedicated `qa-admin@mafteach-habayit.local` (credentials in gitignored `frontend/e2e-live/.env`), creates only `QA-`-prefixed data, never reads-then-modifies or deletes a record it didn't create, and deletes everything it created even on failure. Locally, `backend/prisma/dev.db` is still in use through live dev servers on ports 4000/5173. Any test run — automated (Vitest/Playwright) or manual (curl smoke-testing) — MUST NOT touch that database or those servers.
+Production data lives on Cloudflare (see above) — no test or manual check may write to the production D1/KV. The QA suite (`frontend/e2e-live/`) runs against **dev** only — `LIVE_BASE_URL` in its gitignored `.env` must point at the dev URL. It logs in as the dedicated `qa-admin@mafteach-habayit.local` (credentials in gitignored `frontend/e2e-live/.env`), creates only `QA-`-prefixed data, never reads-then-modifies or deletes a record it didn't create, and deletes everything it created even on failure. Locally, `backend/prisma/dev.db` is still in use through live dev servers on ports 4000/5173. Any test run — automated (Vitest/Playwright) or manual (curl smoke-testing) — MUST NOT touch that database or those servers.
 
 - Backend tests (`backend/tests/`, run via `npm test`) use a separate `test.db` via `backend/.env.test`, guarded in `backend/tests/globalSetup.ts`/`setup.ts` so a test run can never resolve to the real `DATABASE_URL`.
 - Frontend E2E (`frontend/e2e/`, run via `npx playwright test`) spins up an isolated backend (port 4001, `e2e.db`) and frontend (port 5174) per `frontend/playwright.config.ts`, torn down after.

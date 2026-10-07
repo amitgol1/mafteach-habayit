@@ -67,21 +67,27 @@ Local `dev.db` is for development only and is not synced with it.
 
 Any backend change must go into the Worker routes (`backend/src/routes-worker/`), not only the Express ones.
 
-## Deploy
+## Environments
 
-Requires `npx wrangler login` once.
+| | Production | Dev (QA) |
+|---|---|---|
+| URL | https://mafteach-habayit-api.mafteach-habayit-backend.workers.dev | https://mafteach-habayit-api-dev.mafteach-habayit-backend.workers.dev |
+| Worker | `mafteach-habayit-api` | `mafteach-habayit-api-dev` |
+| D1 | `mafteach-habayit-db` | `mafteach-habayit-db-dev` |
+| wrangler flag | none | `--env dev` |
 
-```bash
-cd frontend && npm run build
-cd ../backend && npx wrangler deploy
-```
+Dev uses the same `TOTP_ENCRYPTION_KEY` as production (so copied 2FA setups work) and its own `JWT_SECRET`.
 
-After a schema change in `backend/src/db/schema.ts`:
+## Release
+
+Requires `npx wrangler login` once. After a schema change in `backend/src/db/schema.ts`, run `npx drizzle-kit generate` first; the deploy scripts apply pending migrations.
 
 ```bash
 cd backend
-npx drizzle-kit generate
-npx wrangler d1 migrations apply DB --remote   # before deploying
+npm run copy:prod-to-dev   # dev data := copy of production
+npm run deploy:dev         # build frontend, migrate dev D1, deploy to dev
+cd ../frontend && npx playwright test -c playwright.live.config.ts   # QA on dev
+cd ../backend && npm run deploy:prod   # only after QA approval
 ```
 
 ## Test against the Worker

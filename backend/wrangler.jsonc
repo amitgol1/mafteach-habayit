@@ -40,5 +40,27 @@
       "binding": "UPLOADS_KV",
       "id": "8637a7f5043c4330ba4681fcdf57cba8"
     }
-  ]
+  ],
+
+  // Top level above = production. `--env dev` deploys the same code as the
+  // separate Worker "mafteach-habayit-api-dev" with its own D1/KV, where QA
+  // runs before anything is promoted to production. Bindings aren't
+  // inherited by environments, so they're repeated here.
+  "env": {
+    "dev": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "mafteach-habayit-db-dev",
+          "database_id": "cd7e5e1a-cd61-4413-ad7b-4a36cbb90800"
+        }
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "UPLOADS_KV",
+          "id": "73d28cdad3b54a9b91653af66ff5b9b8"
+        }
+      ]
+    }
+  }
 }

@@ -35,6 +35,9 @@ export function loadLiveEnv(): LiveEnv {
   if (missing.length > 0) {
     throw new Error(`Live QA suite refuses to run: missing keys in e2e-live/.env: ${missing.join(", ")}`);
   }
+  if (new URL(parsed.LIVE_BASE_URL).hostname === "mafteach-habayit-api.mafteach-habayit-backend.workers.dev") {
+    throw new Error("Live QA suite refuses to run against production — point LIVE_BASE_URL at the dev environment");
+  }
   if (!/^https:\/\//.test(parsed.LIVE_BASE_URL)) {
     throw new Error("Live QA suite refuses to run: LIVE_BASE_URL must be an https:// URL");
   }
